@@ -1,0 +1,13 @@
+__pycache__/
+.vscode/
+*.pyc
+*.egg-info/
+*.egg
+
+.logs/
+.metadata/
+.metadata.md/
+
+.test_profile/
+
+docs/source/_build/
