@@ -65,5 +65,3 @@ class FilterBox(Device):
     
     def step_down(self):
         print('filters decremented')
-
-    def 
