@@ -2,7 +2,7 @@
 stages 
 """
 
-__all__ = ['s_stage', 'px', 'py', 'pz', 'th', 'vx', 'vy']
+__all__ = ['s_stage','c_stage', 'px', 'py', 'pz', 'th', 'vx', 'vy']
 
 from ..framework import sd
 from ..session_logs import logger
@@ -23,10 +23,16 @@ class HiTpStage(MotorBundle):
 
     th = Cpt(EpicsMotor, 'BL00:IMS:MOTOR1', labels=('sample',))
 
-s_stage = HiTpStage('', name='s_stage')
+class cassetteStage(MotorBundle):
+    """DeNovX Cassette Holder Sample Stage"""
+    cx = Cpt(EpicsMotor,'BL22:IMS:MOTOR1',kind='hinted',labels=('sample',))
+    cy = Cpt(EpicsMotor,'BL22:IMS:MOTOR2',kind='hinted',labels=('sample',))
+
+c_stage = cassetteStage('', name='c_stage')
+s_stage = HiTpStage('',name='s_stage')
 
 # measure stage status at beginning of every plan
-sd.baseline.append(s_stage)
+sd.baseline.append(c_stage)
 
 # convenience definitions 
 px = s_stage.px

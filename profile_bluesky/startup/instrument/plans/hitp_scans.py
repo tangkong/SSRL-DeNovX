@@ -2,9 +2,8 @@
 scans for high throughput stage
 """
 
-from .locs import loc177
+from ..devices.stages import c_stage
 from ..devices.stages import s_stage
-from ..devices.xspress3 import xsp3
 from ..devices.misc_devices import shutter as fs, lrf, I0, I1, table_busy, table_trigger
 from ..framework import db
 
@@ -17,6 +16,60 @@ from ssrltools.plans import meshcirc, nscan, level_stage_single
 
 __all__ = ['loc_177_scan', 'loc_cust_scan', 'dark_light_plan', 'exp_time_plan', 'gather_plot_ims',
             'plot_dark_corrected', 'multi_acquire_plan', 'level_stage_single', ]
+
+# scan a single sample in a DeNovX cassette based on its center location
+@inject_md_decorator({'macro_name':'sample_scan'})
+def sample_scan(dets,motor1,motor2,center):
+    """
+    sample_scan starts at the center of a a single DeNovX sample and executes a list_scan within the boundaries of the sample geometry
+
+    :param dets: detectors to be used
+    :type dets: list
+    :param motor1: first motor to be used
+    :type motor1: ophyd EPICS motor
+    :param motor2: second motor to be used
+    :type motor2: ophyd EPICS motor
+    :param center: two positions defining center of sample
+    :type center: list of floats
+
+    :yield: results from list_scan
+    """
+
+    ### TODO: make boundaries an arg, calculate from arbitrary boundaries
+
+    # define the boundaries on the sample
+    xWid = 10
+    yWid = 10
+
+    xHigh = center[0] + xwid/2
+    xLow = center[0] - xWid/2
+
+    yhigh = center[1] + yWid/2
+    yLow = center[1] - yWid/2
+    
+    # get all scan locations for list_scan
+    scan_locs = np.vstack((np.linspace(xLow,xHigh),np.linspace(yLow,yHigh)))
+
+    yield from list_scan([dets],motor1,list(scan_locs[0]),motor2,list(scan_locs[1]))
+
+# scan all samples in a DeNovX cassette
+@inject_md_decorator({'macro_name':'cassette_scan'})
+def cassette_scan(dets,motor1,motor2,corr_locs,skip=0,md={}):
+    """ cassette_scan moves to the center of each point on a DeNovX and executesa pre-defined scan in each location
+
+    :param dets: detectors to be used
+    :type dets: list
+    :param motor1: first stage motor to be used
+    :type motor1: ophyd EPICS motor
+    :param motor2: second stage to be used
+    :type motor2: ophyd EPICS motor
+    :param skip: number of datapoints to skip
+    :yield: results from sample_scan
+    """
+
+    # iterate through each center location and execute a sample scan
+    for center in corr_locs:
+        yield from sample_scan(dets,motor1,motor2,center)
 
 # scan sample locations
 @inject_md_decorator({'macro_name': 'loc_177_scan'})
@@ -388,7 +441,7 @@ def tuned_mesh_grid_scan(AD, mot1, s1, f1, int1, mot2, s2, f2, int2,
         if peak_stats.max is None:
             valid_peak = False
 
-        final_position = 
+        final_position = 0 
         if valid_peak: # Condition for finding a peak
             if peak_choice == 'cen':
                 final_position = peak_stats.cen
