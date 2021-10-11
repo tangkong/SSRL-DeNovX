@@ -3,7 +3,6 @@ scans for high throughput stage
 """
 
 from ..devices.stages import c_stage
-from ..devices.stages import s_stage
 from ..devices.misc_devices import shutter as fs, lrf, I0, I1, table_busy, table_trigger
 from ..framework import db
 
@@ -14,9 +13,51 @@ from bluesky.preprocessors import inject_md_decorator
 import bluesky.plan_stubs as bps
 from ssrltools.plans import meshcirc, nscan, level_stage_single
 
-__all__ = ['loc_177_scan', 'loc_cust_scan', 'dark_light_plan', 'exp_time_plan', 'gather_plot_ims',
+__all__ = ['find_coords', 'sample_scan','cassette_scan', 'dark_light_plan', 'exp_time_plan', 'gather_plot_ims',
             'plot_dark_corrected', 'multi_acquire_plan', 'level_stage_single', ]
 
+# center the cassette sample coordinates on the motor stage
+@inject_md_decorator({'macro_name':'find_coords'})
+def find_coords(dets,motor1,motor2,guess):
+    """
+    find_coords takes a guess for the pinhole center, performs a scan,
+    then assigns the motor coordinates of each sample
+    
+    :param dets: photodiode detector to be used
+    :type dets: ophyd det object
+    :param motor1: motor for x axis
+    :type motor1: ophyd EPICS motor 
+    :param motor2: motor for y axis
+    :type motor2: ophyd EPICS motor
+    :param center: inital guess for the center of the pinhole
+    :type center: list with two motor position entires [motor1, motor2]
+    """
+    
+    # TODO: 
+    # grab pinhole bounds from casslocs.csv and scan based on that
+    # determine how many points to scan in each direction
+
+    # first take a scan in the motor1 direction
+    xid = yield from bp.scan([dets],motor1,guess[0] - 0.65,guess[0]+0.65,num=25)
+
+    # grab the photodiode data and find the max
+    xhdr = db[xid].table(fill=True)
+    xarr = xhdr[det_key]
+    xLoc = np.max(xarr)
+
+    # now move the sample stage to that location and take the other scan
+    bps.mv(motor1,xLoc)
+
+    # now take the scan in the motor2 direction
+    yid = yield from scan([dets],motor2,guess[1]-0.65, guess[1]+0.65,num=25)
+
+    #grabthe photodiode data and find the max
+    yhdr = db[yid].table(fill=True)
+    yarr = yhdr[det_key]
+    yLoc = np.max(yarr) #assuming a 1d array here
+
+    # now pass the offsets to the stage object  to reset the positions
+    c_stage.correct([xLoc,yLoc])
 # scan a single sample in a DeNovX cassette based on its center location
 @inject_md_decorator({'macro_name':'sample_scan'})
 def sample_scan(dets,motor1,motor2,center):
@@ -71,100 +112,6 @@ def cassette_scan(dets,motor1,motor2,corr_locs,skip=0,md={}):
     for center in corr_locs:
         yield from sample_scan(dets,motor1,motor2,center)
 
-# scan sample locations
-@inject_md_decorator({'macro_name': 'loc_177_scan'})
-def loc_177_scan(dets, skip=0, md={}):
-    """loc_177_scan scans across a library with 177 points, measuring each 
-    detector in dets
-
-    :param dets: detectors to be 
-    :type dets: list
-    :param skip: number of data points to skip
-    :yield: things from list_scan
-    :rtype: Msg
-    """
-    # format locations and stage motors
-    if I0 not in dets:
-        dets.append(I0)
-    if I1 not in dets:
-        dets.append(I1)
-
-    if xsp3 in dets:
-        yield from bps.mv(xsp3.total_points, 177)
-
-    # inject logic via per_step 
-    class stateful_per_step:
-        
-        def __init__(self, skip):
-            self.skip = skip
-            self.cnt = 0
-            #print(self.skip, self.cnt)
-
-        def __call__(self, detectors, step, pos_cache):
-            """
-            has signature of bps.one_and_step, but with added logic of skipping 
-            a point if it is outside of provided radius
-            """
-            if self.cnt < self.skip: # if not enough skipped
-                self.cnt += 1
-                pass
-            else:
-                yield from bps.one_nd_step(detectors, step, pos_cache)
-
-    per_stepper = stateful_per_step(skip)
-
-    yield from bp.list_scan(dets, s_stage.px, list(loc177[0]), 
-                                s_stage.py, list(loc177[1]), 
-                                per_step=per_stepper, md=md)
-
-
-@inject_md_decorator({'macro_name': 'loc_cust_scan'})
-def loc_cust_scan(dets, cust_locs, skip=0, md={}):
-    """loc_cust_scan scans across a library with 177 points, measuring each 
-    detector in dets
-
-    :param dets: detectors to be 
-    :type dets: list
-    :param cust_locs: (2, N) array denoting N locations to scan.  First list 
-                      will direct px and the second will direct py 
-    :type cust_locs: list
-    :param skip: number of data points to skip
-    :yield: things from list_scan
-    :rtype: Msg
-    """
-    # format locations and stage motors
-    if I0 not in dets:
-        dets.append(I0)
-    if I1 not in dets:
-        dets.append(I1)
-
-    if xsp3 in dets:
-        yield from bps.mv(xsp3.total_points, len(cust_locs[0]))
-
-    # inject logic via per_step 
-    class stateful_per_step:
-        
-        def __init__(self, skip):
-            self.skip = skip
-            self.cnt = 0
-            #print(self.skip, self.cnt)
-
-        def __call__(self, detectors, step, pos_cache):
-            """
-            has signature of bps.one_and_step, but with added logic of skipping 
-            a point if it is outside of provided radius
-            """
-            if self.cnt < self.skip: # if not enough skipped
-                self.cnt += 1
-                pass
-            else:
-                yield from bps.one_nd_step(detectors, step, pos_cache)
-
-    per_stepper = stateful_per_step(skip)
-
-    yield from bp.list_scan(dets, s_stage.px, list(cust_locs[0]), 
-                                s_stage.py, list(cust_locs[1]), 
-                                per_step=per_stepper, md=md)
 
 # collection plans
 # Basic dark > light collection plan
@@ -311,16 +258,6 @@ def plot_dark_corrected(hdrs):
     bkgd_subbed[ bkgd_subbed < 0 ] = 0
     plt.imshow(bkgd_subbed, vmax = bkgd_subbed.mean() + 3*bkgd_subbed.std())
 
-def plot_MCA(hdrs):
-    '''Plot MCA's from given hdr
-    '''
-    plt.figure()
-    data = hdrs.table(fill=True)['xsp3_channel1'][1]
-
-    plt.plot(data)
-    plt.xlabel('Energy (keV)')
-    plt.ylabel('Total counts')
-
 @inject_md_decorator({'macro_name':'multi_acquire_plan'})
 def multi_acquire_plan(det, acq_time, reps): 
     '''multiple acquisition run.  Single dark image, multiple light
@@ -337,20 +274,6 @@ def multi_acquire_plan(det, acq_time, reps):
         light_uids.append(light_uid) 
     
     return (dark_uid, light_uids) 
-
-@inject_md_decorator({'macro_name': 'level_s_stage'})    
-def level_s_stage():
-    """level_s_stage level s_stage vx, vy
-
-    double wafer stage: (-85, 85), (-58, 85)
-    """
-    # level on y axis
-    yield from bps.mv(s_stage.px, 0, s_stage.py, 0)
-    yield from level_stage_single(lrf, s_stage.vx, s_stage.px, -50, 50)
-
-    # level on x axis
-    yield from bps.mv(s_stage.px, 0, s_stage.py, 0)
-    yield from level_stage_single(lrf, s_stage.vy, s_stage.py, 60, -60)
 
 
 @inject_md_decorator({'marco_name': 'tablev_scan'})
@@ -479,3 +402,16 @@ def tuned_mesh_grid_scan(AD, mot1, s1, f1, int1, mot2, s2, f2, int2,
     newGen = bp.grid_scan(detectors, *motor_args, 
                             per_step=per_stepper, md=_md)
     return (yield from newGen)
+
+@inject_md_decorator({'macro_name':'powder_check'})
+def powder_check(dets):
+    """
+    plan to check the coverage of peaks on the detector. this plan takes a scan, applies some metrics to check the q/chi coverage of peaks on the detector, and reports a value.
+    """
+
+
+
+
+
+
+
