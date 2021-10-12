@@ -18,7 +18,7 @@ __all__ = ['find_coords', 'sample_scan','cassette_scan', 'dark_light_plan', 'exp
 
 # center the cassette sample coordinates on the motor stage
 @inject_md_decorator({'macro_name':'find_coords'})
-def find_coords(dets,motor1,motor2,guess):
+def find_coords(dets,motor1,motor2,guess, detKey):
     """
     find_coords takes a guess for the pinhole center, performs a scan,
     then assigns the motor coordinates of each sample
@@ -42,20 +42,21 @@ def find_coords(dets,motor1,motor2,guess):
 
     # grab the photodiode data and find the max
     xhdr = db[xid].table(fill=True)
-    xarr = xhdr[det_key]
-    xLoc = np.max(xarr)
+    xarr = xhdr[detKey] # xhdr[det.name]
+    #xLoc = xarr[xarr == xarr.max()]
+    xLoc = 0
 
     # now move the sample stage to that location and take the other scan
-    bps.mv(motor1,xLoc)
+    yield from bps.mv(motor1,xLoc)
 
     # now take the scan in the motor2 direction
-    yid = yield from scan([dets],motor2,guess[1]-0.65, guess[1]+0.65,num=25)
+    yid = yield from bp.scan([dets],motor2,guess[1]-0.65, guess[1]+0.65,num=25)
 
-    #grabthe photodiode data and find the max
+    # grab the photodiode data and find the max
     yhdr = db[yid].table(fill=True)
-    yarr = yhdr[det_key]
-    yLoc = np.max(yarr) #assuming a 1d array here
-
+    yarr = yhdr[detKey]
+    # yLoc = yarr[yarr == yarr.max()] #assuming a 1d array here
+    yLoc = 0
     # now pass the offsets to the stage object  to reset the positions
     c_stage.correct([xLoc,yLoc])
 # scan a single sample in a DeNovX cassette based on its center location
