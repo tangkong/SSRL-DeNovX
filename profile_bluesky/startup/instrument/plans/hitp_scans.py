@@ -13,8 +13,30 @@ from bluesky.preprocessors import inject_md_decorator
 import bluesky.plan_stubs as bps
 from ssrltools.plans import meshcirc, nscan, level_stage_single
 
-__all__ = ['find_coords', 'sample_scan','cassette_scan', 'dark_light_plan', 'exp_time_plan', 'gather_plot_ims',
+__all__ = ['calibrate','find_coords', 'sample_scan','cassette_scan', 'dark_light_plan', 'exp_time_plan', 'gather_plot_ims',
             'plot_dark_corrected', 'multi_acquire_plan', 'level_stage_single', ]
+
+# scan a calibrant, integrate the image, calibrate the stage-detector setup
+@inject_md_decorator({'macro_name':'calibrate'})
+def calibrate(dets,motor1,motor2,center):
+    """
+    scans a calibrant or series of calibrants, performs an image calibration, and integrates the image
+    :param dets: area detector data is collected on
+    :type dets: ophyd det object
+    :param motor1: motor for x axis
+    :type motor1: ophyd EPICS motor
+    :param motor2: motor for y axis
+    :type motor2: ophyd EPICS motor
+    :param center: xy coordinates or list of coordinates for calibrant center(s)
+    :type center: list of xy coordinates
+    """
+
+    # first move to the calibrant location
+    yield from bps.mv(motor1,center[0],motor2,center[1])
+
+    # assign an id to the databroker for this scan
+    # use the rocking 
+    # cid = yield from bp.
 
 # center the cassette sample coordinates on the motor stage
 @inject_md_decorator({'macro_name':'find_coords'})
@@ -43,8 +65,7 @@ def find_coords(dets,motor1,motor2,guess, detKey):
     # grab the photodiode data and find the max
     xhdr = db[xid].table(fill=True)
     xarr = xhdr[detKey] # xhdr[det.name]
-    #xLoc = xarr[xarr == xarr.max()]
-    xLoc = 0
+    xLoc = xarr[xarr == xarr.max()]
 
     # now move the sample stage to that location and take the other scan
     yield from bps.mv(motor1,xLoc)
@@ -55,10 +76,11 @@ def find_coords(dets,motor1,motor2,guess, detKey):
     # grab the photodiode data and find the max
     yhdr = db[yid].table(fill=True)
     yarr = yhdr[detKey]
-    # yLoc = yarr[yarr == yarr.max()] #assuming a 1d array here
-    yLoc = 0
+    yLoc = yarr[yarr == yarr.max()] #assuming a 1d array here
+    
     # now pass the offsets to the stage object  to reset the positions
     c_stage.correct([xLoc,yLoc])
+
 # scan a single sample in a DeNovX cassette based on its center location
 @inject_md_decorator({'macro_name':'sample_scan'})
 def sample_scan(dets,motor1,motor2,center):

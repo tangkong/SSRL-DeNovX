@@ -136,7 +136,13 @@ def avg_images(ind=-1,img_key='marCCD_image'):
 
     return avg_arr
 
+
+# function for setting filter box
 def filters(new_vals=None):
+    """
+    :param new_vals: new vals
+    :type new_vals: list?
+    """
     if new_vals:
         filter1.put(new_vals[0]*4.9)
         filter2.put(new_vals[1]*4.9)
@@ -146,3 +152,38 @@ def filters(new_vals=None):
     print(f'filter2: {filter2.get():.1f}')
     print(f'filter3: {filter3.get():.1f}')
     print(f'filter4: {filter4.get():.1f}')
+
+# calculating the boundaries on a sample and inscribing motor movement
+# inside of that 2D area
+# currently this only works for a circular sample and a box beam
+def inscribe(center,dia,box):
+    """
+    TODO: write up an explanation of your math/logic
+    :param center: list of sample center coordinates
+    :type center: list
+    :param dia: sample diameter
+    :type dia: float
+    :param box: width and height of box beam
+    :type box: list
+    """
+    
+    # calculate how many boxes it takes to cover the area of the circle
+    # if the box is w wide and h tall then to cover a circle of
+    # diameter d you will need n*w boxes wide and m*h boxes tall (english?)
+    # calculate n=d/w and m=d/h 
+    # keep integer values at the end
+    n = np.int(np.ceil(dia/w))
+    m = np.int(np.ceil(dia/h))
+    # we want to center the box on the circle center so keep it even
+    if n % 2 != 0:
+        n += 1
+    if m % 2 != 0:
+        m += 1
+
+    # this is not going to be pretty
+    # generate an array for the inscribing box
+    # calculate start and end points
+
+
+
+

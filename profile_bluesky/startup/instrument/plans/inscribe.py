@@ -1,3 +1,6 @@
+# this is just a test script, to be implemented in helpers.py
+# it is grossly 
+
 import numpy as np
 from matplotlib import pyplot as plt
 
@@ -21,16 +24,29 @@ if m % 2 != 0:
 
 # generate an array for the inscribing box
 # calculate start and end points for the box
-xst = C[0] - (w*n)/2
-xen = C[0] + (w*n)/2
-yst = C[1] - (h*n)/2
-yen = C[1] + (h*n)/2
+#xst = C[0] - (w*n)/2
+#xen = C[0] + (w*n)/2
+#yst = C[1] - (h*n)/2
+#yen = C[1] + (h*n)/2
 
-xarr = np.linspace(xst,xen,num=n)
-yarr = np.linspace(yst,yen,num=m)
+xarr = np.linspace(C[0]-w*(n/2),C[0]+w*(n/2),num=n)
+yarr = np.linspace(C[1]-h*(m/2),C[1]+h*(m/2),num=m)
+
+# generate a reciprocal grid
+aarr = np.linspace(C[0]-w/2-(n*w)/2,C[0]+w/2+(n*w)/2,num=n+1)
+barr = np.linspace(C[1]-h/2-(m*h)/2,C[1]+h/2*(m*h)/2,num=m)
+print('aarr' + str(aarr))
+print('barr' + str(barr))
 
 # generate a grid
 xx, yy = np.meshgrid(xarr,yarr)
+aa, bb = np.meshgrid(aarr,barr)
+
+
+plt.figure()
+plt.plot(xx,yy,'r.')
+plt.plot(aa,bb,'g.')
+plt.show()
 
 # list to store all teh acceptable positions
 xacc = []
