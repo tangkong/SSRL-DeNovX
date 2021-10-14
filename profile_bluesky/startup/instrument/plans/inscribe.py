@@ -9,7 +9,7 @@ d = 10
 C = np.array([d/2,d/2])
 
 #box width 
-w = 3
+w = 2
 h = 2
 
 # inscribe a box
@@ -29,24 +29,11 @@ if m % 2 != 0:
 #yst = C[1] - (h*n)/2
 #yen = C[1] + (h*n)/2
 
-xarr = np.linspace(C[0]-w*(n/2),C[0]+w*(n/2),num=n)
-yarr = np.linspace(C[1]-h*(m/2),C[1]+h*(m/2),num=m)
-
-# generate a reciprocal grid
-aarr = np.linspace(C[0]-w/2-(n*w)/2,C[0]+w/2+(n*w)/2,num=n+1)
-barr = np.linspace(C[1]-h/2-(m*h)/2,C[1]+h/2*(m*h)/2,num=m)
-print('aarr' + str(aarr))
-print('barr' + str(barr))
+xarr = np.linspace(C[0]-w*(n/2),C[0]+w*(n/2),num=50,endpoint=True)
+yarr = np.linspace(C[1]-h*(m/2),C[1]+h*(m/2),num=50,endpoint=True)
 
 # generate a grid
 xx, yy = np.meshgrid(xarr,yarr)
-aa, bb = np.meshgrid(aarr,barr)
-
-
-plt.figure()
-plt.plot(xx,yy,'r.')
-plt.plot(aa,bb,'g.')
-plt.show()
 
 # list to store all teh acceptable positions
 xacc = []
@@ -59,7 +46,6 @@ for ii in xarr:
                 C - [ii,jj-h/2],C - [ii,jj+h/2]]
         test = [0,0,0,0]
         for ind,bnd in enumerate(bnds):
-            print(np.linalg.norm(bnd))
             if np.linalg.norm(bnd) > d/2:
                 test[ind] = 1
 

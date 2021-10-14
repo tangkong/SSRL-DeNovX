@@ -2,8 +2,8 @@
 Helper plans, functions
 
 """
-from ..framework.initialize import db
-from ..devices.misc_devices import filter1, filter2, filter3, filter4
+#from ..framework.initialize import db
+#from ..devices.misc_devices import filter1, filter2, filter3, filter4
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -156,7 +156,7 @@ def filters(new_vals=None):
 # calculating the boundaries on a sample and inscribing motor movement
 # inside of that 2D area
 # currently this only works for a circular sample and a box beam
-def inscribe(center,dia,box):
+def inscribe(motor1,motor2,C,dia,box,res):
     """
     TODO: write up an explanation of your math/logic
     :param center: list of sample center coordinates
@@ -165,13 +165,22 @@ def inscribe(center,dia,box):
     :type dia: float
     :param box: width and height of box beam
     :type box: list
+    :param res: number of points to generate along each direction
+    :type res: list of size for each dimension
+    :return xacc,yacc: mask of valid motor positions
+    :type xacc,yacc: lists of floats
     """
-    
+
+    # convert the C list to an array because
+    C = np.array(C)
+
     # calculate how many boxes it takes to cover the area of the circle
     # if the box is w wide and h tall then to cover a circle of
     # diameter d you will need n*w boxes wide and m*h boxes tall (english?)
-    # calculate n=d/w and m=d/h 
+    # calculate n=d/w and m=d/h
     # keep integer values at the end
+    w = box[0]
+    h = box[1]
     n = np.int(np.ceil(dia/w))
     m = np.int(np.ceil(dia/h))
     # we want to center the box on the circle center so keep it even
@@ -183,6 +192,75 @@ def inscribe(center,dia,box):
     # this is not going to be pretty
     # generate an array for the inscribing box
     # calculate start and end points
+    xRange = [C[0]-(w*n)/2,C[0]+(w*n)/2]
+    yRange = [C[1]-(h*m)/2,C[1]+(h*m)/2]
+
+    # create points along the ranges
+    xarr = np.linspace(xRange[0],xRange[1],num=res[0],endpoint=True)
+    yarr = np.linspace(yRange[0],yRange[1],num=res[1],endpoint=True)
+
+    # array to store all of the (in)valid motor positions
+    mask = np.zeros([res[0],res[1]])
+    xpos = np.zeros([res[0],res[1]])
+    ypos = np.zeros([res[0], res[1]])
+
+    # now step through the points on the grid and check if the corners of the box fall outside the circle radius
+    for ind1,ii in enumerate(xarr):
+        for ind2,jj in enumerate(yarr):
+            # place the motor positions at that location
+            xpos[ind1,ind2] = ii
+            ypos[ind1,ind2] = jj
+
+            # find the corner of the box
+            bnds = [C - [ii-w/2,jj-h/2], # bottom left corner
+                    C - [ii-w/2,jj+h/2], # bottom right corner
+                    C - [ii+w/2,jj-h/2], #top left corner
+                    C - [ii+w/2,jj+h/2] #top right corner
+                    ]
+
+            test = [0,0,0,0] # so stupid, find a better way plz
+            for ind,bnd in enumerate(bnds):
+                # check if the corners of the box are outside the radius
+                if np.linalg.norm(bnd) > dia/2:
+                    test[ind] = 1
+
+            if 1 in test:
+                mask[ind1,ind2] = 0
+            else:
+                mask[ind1,ind2] = 1
+
+
+    # create a dictionary with the motors and positions
+    motorpos = {motor1:xpos,motor2:ypos}
+
+    return mask, motorpos
+
+# take an inscribed area and generate rocking scan positions
+def generate_rocking_range(mask,motor):
+    """
+    this function takes an array of motor positions and calculates ranges for a rocking scan
+    it can also optionally generate a dictionary for staging the motors before each scan
+    :param mask: valid motor positions for the sample
+    :type mask: list created by inscribe()
+    :return ranges,stage: list of [min.max] values to rock across, dictionary of staging positions
+    """
+
+    range = []
+    stage = {}
+
+    for ind,row in enumerate(mask):
+        minn = min(row[motor])
+        maxx = max(row[motor])
+
+        range.append([minn,maxx])
+
+        lind = np.where(row[motor] == minn)[0]
+
+        stage[ind] = {}
+        for smotor in row:
+            stage[ind][smotor] = row[motor][lind]
+
+    return range,stage
 
 
 

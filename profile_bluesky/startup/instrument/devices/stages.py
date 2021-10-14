@@ -50,6 +50,19 @@ class cassetteStage(MotorBundle):
         self.ylocs = self.ylocs + cLocs[1] #plus based on motor directions
         return self
 
+    def mask(self):
+        def __init__:
+            self.mask.mask = None
+            self.motors = {}
+
+        def update_mask(self,nmask):
+            self.mask = nmask
+            return self
+
+        def update_motors(self,motor,pos):
+            self.motors[motor] = pos
+            return self
+
 c_stage = cassetteStage('', name='c_stage')
 
 # measure stage status at beginning of every plan
