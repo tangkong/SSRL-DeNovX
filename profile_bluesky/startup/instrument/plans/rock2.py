@@ -8,7 +8,7 @@ def rock(det, motor, ranges, *, stage=None, md=None):
     :type motor: EpicsMotor
     :param ranges: min and max values to rock the motor across
     :type minn: list of N length lists containing [min,max] pairs
-    :param stage: optional staging positgit ions to execute before each rocking command, defaults to None
+    :param stage: optional staging positions to execute before each rocking command, defaults to None
     :type stage: dictionary containing N key-value pairs; each key is an integer 1...N and each value
                  is a dictionary; the inner dictionaries contain key-value pairs for a motor to stage
                  and the staging position; ex. stage={1:{motor1,pos1},2:{motor1,pos2}}
