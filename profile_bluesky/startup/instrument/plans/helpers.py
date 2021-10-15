@@ -209,8 +209,8 @@ def inscribe(motor1,motor2,C,dia,box,res):
     for ind1,ii in enumerate(xarr):
         for ind2,jj in enumerate(yarr):
             # place the motor positions at that location
-            xpos[ind1,ind2] = ii
-            ypos[ind1,ind2] = jj
+            ypos[ind1,ind2] = ii
+            xpos[ind1,ind2] = jj
 
             # find the corner of the box
             bnds = [C - [ii-w/2,jj-h/2], # bottom left corner
