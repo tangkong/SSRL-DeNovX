@@ -2,12 +2,12 @@
 Helper plans, functions
 
 """
-#from ..framework.initialize import db
-#from ..devices.misc_devices import filter1, filter2, filter3, filter4
+from ..framework.initialize import db
+from ..devices.misc_devices import filter1, filter2, filter3, filter4
 import matplotlib.pyplot as plt
 import numpy as np
 
-__all__ = ['show_table', 'show_image', 'show_scan', 'avg_images', 'filters']
+__all__ = ['show_table', 'show_image', 'show_scan', 'avg_images', 'filters','inscribe','generate_rocking_range']
 
 def show_table(ind=-1):
     return db[ind].table()
@@ -157,6 +157,7 @@ def filters(new_vals=None):
 # inside of that 2D area
 # currently this only works for a circular sample and a box beam
 def inscribe(motor1,motor2,C,dia,box,res):
+   
     """
     TODO: write up an explanation of your math/logic
     :param center: list of sample center coordinates
@@ -246,22 +247,32 @@ def generate_rocking_range(mask,motor):
     """
 
     range = []
-    stage = {}
+    stage = {'1':[],'2':[]}
 
-    for ind,row in enumerate(mask):
-        minn = min(row[motor])
-        maxx = max(row[motor])
+    for ind,row in enumerate(mask.mask):
+        # find valid indices
+        valid = np.where(row == 1)[0]
+
+        if len(valid) == 0:
+            continue
+
+        mval = []
+        for val in valid:
+            mval.append(mask.cx[ind][val])
+
+        # find the range to rock across
+        minn = min(mval)
+        maxx = max(mval)
 
         range.append([minn,maxx])
+        
+        # get indices for start location
+        lind = np.where(mask.cx[ind] == minn)[0]
+        print(lind)
+        
+        # now update the stage object
+        stage['1'].append(mask.cx[ind][lind])
+        stage['2'].append(mask.cy[ind][lind])
 
-        lind = np.where(row[motor] == minn)[0]
-
-        stage[ind] = {}
-        for smotor in row:
-            stage[ind][smotor] = row[motor][lind]
-
+      
     return range,stage
-
-
-
-

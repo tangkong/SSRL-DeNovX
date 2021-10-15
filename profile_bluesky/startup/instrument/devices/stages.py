@@ -4,7 +4,7 @@ import numpy as np
 stages 
 """
 
-__all__ = ['c_stage']
+__all__ = ['c_stage','mask']
 
 from ..framework import sd
 from ..session_logs import logger
@@ -20,6 +20,12 @@ class cassetteStage(MotorBundle):
     # TODO: can't find the .csv file in this directory, need to fix 
     # import the absolute sample positions
     casslocs =pd.read_csv('/home/b_spec/.ipython/profile_DeNovX/startup/instrument/devices/casslocs.csv',header=0)
+    
+    # raw locations NOT TO BE CHANGED
+    rxlocs = -1*np.array(casslocs['x'])
+    rylocs = np.array(casslocs['y'])
+   
+    # sample location values to be returned; these can be changed
     xlocs = -1*np.array(casslocs['x']) # !!! NOTE THE NEGATIVE 1 !!!
     ylocs = np.array(casslocs['y'])
     ids = np.array(casslocs['ID'])
@@ -46,24 +52,24 @@ class cassetteStage(MotorBundle):
         : param cLocs: motor offset positions
         : type cLocs: list of length 2
         """
-        self.xlocs = self.xlocs + cLocs[0] #plus based on motor directions
-        self.ylocs = self.ylocs + cLocs[1] #plus based on motor directions
+        self.xlocs = self.rxlocs + cLocs[0] #plus based on motor directions
+        self.ylocs = self.rylocs + cLocs[1] #plus based on motor directions
         return self
 
-    def mask(self):
-        def __init__:
-            self.mask.mask = None
-            self.motors = {}
-
-        def update_mask(self,nmask):
-            self.mask = nmask
-            return self
-
-        def update_motors(self,motor,pos):
-            self.motors[motor] = pos
-            return self
-
 c_stage = cassetteStage('', name='c_stage')
+
+class mask():
+    def __init__(self):
+        self.mask = None
+        self.cx = None
+        self.cy = None
+        return self
+
+    def update_mask(self,nmask,ncxpos,ncypos):
+        self.mask = nmask
+        self.cx = ncxpos
+        self.cy = ncypos
+        return self
 
 # measure stage status at beginning of every plan
 sd.baseline.append(c_stage)
