@@ -24,7 +24,7 @@ def max_pixel_count(dets, sat_count=60000, md={}):
 
     Adjust acquisition time based on max pixel count
     Assume each det in dets has an attribute det.max_count.
-    Assume counts are linear with time. 
+    Assume counts are linear with time.
     Scale acquisition time to make det.max_count.get()=sat_count
     """
 
@@ -36,11 +36,38 @@ def max_pixel_count(dets, sat_count=60000, md={}):
         curr_max_counts = det.max_count.get()
         # ============================================
         new_acq_time = round(sat_count / curr_max_counts * curr_acquire_time, 2)
-        
+
         yield from bps.mv(det.cam.acquire_time, new_acq_time)
 
     # run standard count plan with new acquire times
     yield from bp.count(dets, md=md)
+
+
+def max_pixel_rock(dets, motor,range, sat_count=60000, md={},imgkey='Dexela'):
+    """max_pixel_count
+
+    Adjust acquisition time based on max pixel count
+    Assume each det in dets has an attribute det.max_count.
+    Assume counts are linear with time.
+    Scale acquisition time to make det.max_count.get()=sat_count
+    """
+
+    for det in dets:
+        # stage the detector
+        yield from bps.stage(det)
+        # perform a rocking scan
+        uid = yield from rock(dets,motor,range)
+        # grab the image
+        sarr = sum_image(ind=-1,imgkey = imgkey)
+        # find the max pixel count on the image
+        curr_max_counts = np.max(sarr)
+        # get the current detector acquisition time
+        curr_acq_time = det.cam.acquire_time.get()
+        # calculate a new acquisition time based on the desired max counts
+        new_acq_time = round(sat_count / curr_max_counts * curr_acq_time, 2)
+
+        # set the detector to the new value
+        yield from bps.mv(det.cam.acquire_time, new_acq_time)
 
 def filter_opt_count(det, target_count=100000, md={}):
     """ filter_opt_count
@@ -86,7 +113,7 @@ def filter_opt_count(det, target_count=100000, md={}):
     
     yield from bps.trigger_and_read([det, filter1, filter2, filter3, filter4])
 
-    # close out run
+    # close out runl
     yield from bps.close_run()
     yield from bps.unsubscribe(token)
     yield from bps.unstage(det)

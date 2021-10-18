@@ -7,7 +7,8 @@ from ..devices.misc_devices import filter1, filter2, filter3, filter4
 import matplotlib.pyplot as plt
 import numpy as np
 
-__all__ = ['show_table', 'show_image', 'show_scan', 'avg_images', 'filters','inscribe','generate_rocking_range']
+__all__ = ['show_table', 'show_image', 'show_scan', 'avg_images', 'filters','inscribe','generate_rocking_range',
+           'data_reduction']
 
 def show_table(ind=-1):
     return db[ind].table()
@@ -91,7 +92,7 @@ def show_scan(ind=-1, dep_subkey='channel1_rois_', indep_subkey='s_stage'):
         return
 
 
-def avg_images(ind=-1,img_key='marCCD_image'):
+def avg_images(ind=-1,img_key='Dexela'):
     """avg_images [summary]
 
     [extended_summary]
@@ -136,6 +137,34 @@ def avg_images(ind=-1,img_key='marCCD_image'):
 
     return avg_arr
 
+
+def sum_images(ind=-1, img_key='Dexela'):
+    """sum_images [summary]
+
+    [extended_summary]
+
+    :param ind: Run index, defaults to -1.
+                If negative integer, counts backward from most recent run (-1=most recent, -2=second most recent)
+                If positive integer, matches 'scan_id'
+                If string, interprets as the start of a UID (ex: '8ee443d')
+    :type ind: int, optional
+    :param img_key: [description], defaults to 'marCCD_image'
+    :type img_key: str, optional
+    :return: [description]
+    :rtype: [type]
+    """
+    ''' Tries to sum images inside a run.  
+    Currently assumes Dexela format 
+    returns the array after.'''
+
+    df = db[ind].table(fill=True)
+
+    # gather images
+    arr = []
+    for i in range(len(df)):
+        arr.append(df[img_key][i + 1][0])
+
+    return arr
 
 # function for setting filter box
 def filters(new_vals=None):
@@ -276,3 +305,61 @@ def generate_rocking_range(mask,motor):
 
       
     return range,stage
+
+def data_reduction(imArray, d, Rot, tilt, lamda, x0, y0, PP, pixelsize,
+                   QRange=None, ChiRange=None):
+    """
+    @author: fangren
+    The input is the raw file's name and calibration parameters
+    return Q-chi (2D array) and a spectrum (1D array)
+    :param imArray: image array
+    :type imArray: 2d image array
+    :param d: detector distance
+    :param Rot: detector rotation
+    :param tilt: detector tilt
+    :param lamda: wavelength (angstroms)
+    :param x0: x pixel center
+    :param y0: y pixel center
+    :param PP: polarization factor
+    :param pixelsize: detector pixelsize
+    :type all above: float
+    """
+    s1 = int(imArray.shape[0])
+    s2 = int(imArray.shape[1])
+    imArray = signal.medfilt(imArray, kernel_size=5)
+
+    detector_mask = np.ones((s1, s2)) * (imArray <= 0)
+    p = pyFAI.AzimuthalIntegrator(wavelength=lamda)
+
+    # refer to http://pythonhosted.org/pyFAI/api/pyFAI.html for pyFAI parameters
+    p.setFit2D(d, x0, y0, tilt, Rot, pixelsize, pixelsize)
+
+    # the output unit for Q is angstrom-1.  Always integrate all in 2D
+    cake, Q, chi = p.integrate2d(imArray, 1000, 1000,
+                                 # azimuth_range=azRange, radial_range=radRange,
+                                 mask=detector_mask, polarization_factor=PP)
+
+    # pyFAI output unit for Fit2D gemoetry incorrect. Multiply by 10e8 for correction
+    Q = Q * 10e8
+
+    # create azimuthal range from chi values found in 2D integrate
+    # modify ranges to fit with detector geometry
+    centerChi = (np.max(chi) + np.min(chi)) / 2
+    if (QRange is not None) and (ChiRange is not None):
+        azRange = (centerChi + ChiRange[0], centerChi + ChiRange[1])
+        radRange = tuple([y / 10E8 for y in QRange])
+        print(azRange, radRange)
+    else:
+        azRange, radRange = None, None
+
+    Qlist, IntAve = p.integrate1d(imArray, 1000,
+                                  azimuth_range=azRange, radial_range=radRange,
+                                  mask=detector_mask, polarization_factor=PP)
+
+    # the output unit for Q is angstrom-1
+    Qlist = Qlist * 10e8
+
+    # shift chi from 2D integrate
+    chi = chi - centerChi
+
+    return Q, chi, cake, Qlist, IntAve
