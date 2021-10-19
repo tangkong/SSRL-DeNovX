@@ -14,8 +14,8 @@ from ophyd import Component as Cpt, MotorBundle, EpicsMotor
 
 class cassetteStage(MotorBundle):
     """DeNovX Cassette Holder Sample Stage"""
-    cx = Cpt(EpicsMotor,'BL22:IMS:MOTOR1',kind='hinted',labels=('sample',))
-    cy = Cpt(EpicsMotor,'BL22:IMS:MOTOR2',kind='hinted',labels=('sample',))
+    cx = Cpt(EpicsMotor,'TXRD:IMS:MOTOR1',kind='hinted',labels=('sample',))
+    cy = Cpt(EpicsMotor,'TXRD:IMS:MOTOR2',kind='hinted',labels=('sample',))
 
     # TODO: can't find the .csv file in this directory, need to fix 
     # import the absolute sample positions
