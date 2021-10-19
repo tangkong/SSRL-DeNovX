@@ -33,15 +33,16 @@ class cassetteStage(MotorBundle):
         """ 
         function that returns motor positions for samples based on string IDs
         if a .csv file with ID:position pairs is provided
-        : param key: a string id with an associate position
+        : param key: a list of string ids with an associate position
         : type key: a variable length string
         """
         pos = []
         for key in keys:
-            print(key)
-            m1 = self.xlocs[np.where(self.ids == key)[0]][0]
-            m2 = self.ylocs[np.where(self.ids == key)[0]][0]
-            pos.append([m1,m2])
+            if key in self.ids:
+                print(key)
+                m1 = self.xlocs[np.where(self.ids == key)[0]][0]
+                m2 = self.ylocs[np.where(self.ids == key)[0]][0]
+                pos.append([m1,m2])
         
         return pos
 
