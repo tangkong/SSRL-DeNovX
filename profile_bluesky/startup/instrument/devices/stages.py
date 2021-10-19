@@ -4,7 +4,7 @@ import numpy as np
 stages 
 """
 
-__all__ = ['c_stage','mask']
+__all__ = ['c_stage']
 
 from ..framework import sd
 from ..session_logs import logger
