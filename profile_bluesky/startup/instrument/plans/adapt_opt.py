@@ -13,7 +13,7 @@ from .hitp_scans import rock
 from ..devices.misc_devices import filter1, filter2, filter3, filter4
 
 
-__all__ = ['filter_opt_count', 'solve_filter_setup','filter_thicks', 'filter_hist']
+__all__ = ['max_pixel_count','max_pixel_rock','filter_opt_count', 'solve_filter_setup','filter_thicks', 'filter_hist']
 
 # dataframe to record intensity and filter information.  
 filter_hist = pd.DataFrame(columns=['time','filter_i','filter_f','I_i', 'I_f', 
@@ -31,8 +31,9 @@ def max_pixel_count(dets, sat_count=60000, md={}):
     """
 
     for det in dets:
+        yield from bps.open_run()
         yield from bps.stage(det)
-        yield from bps.trigger_and_read(det)
+        yield from bps.trigger_and_read([det])
         curr_acq_time = det.cam.acquire_time.get()
         # =================== BIG IF, DOES THIS EXIST
         curr_max_counts = det.highest_pixel.get()
@@ -40,7 +41,7 @@ def max_pixel_count(dets, sat_count=60000, md={}):
         new_acq_time = round(sat_count / curr_max_counts * curr_acq_time, 2)
 
         yield from bps.mv(det.cam.acquire_time, new_acq_time)
-
+        yield from bps.close_run()
     # run standard count plan with new acquire times
     yield from bp.count(dets, md=md)
 
