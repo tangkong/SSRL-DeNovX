@@ -266,7 +266,7 @@ def inscribe(motor1,motor2,C,dia,box,res):
     return mask, motorpos
 
 # take an inscribed area and generate rocking scan positions
-def generate_rocking_range(mask):
+def generate_rocking_range(rmotor, mask,mpos,transpose = False):
     """
     this function takes an array of motor positions and calculates ranges for a rocking scan
     it can also optionally generate a dictionary for staging the motors before each scan
@@ -276,34 +276,48 @@ def generate_rocking_range(mask):
     """
 
     range = []
-    stage = {'1':[],'2':[]}
+    stage = {}
+    for motor in mpos:
+        stage[motor] = {}
 
-    for ind,row in enumerate(mask.mask):
-        # find valid indices
+    # take transpose if asked
+    if transpose:
+        mask = np.transpose(mask)
+        for motor in mpos:
+            mpos[motor] = np.transpose(mpos[motor])
+
+    # go through rows (columns) of the mask
+    for ind,row in enumerate(mask):
+
+        # set up the motor stage dict
+        for motor in mpos:
+            stage[motor][ind] = []
+
+        # find valid indices that equal 1
         valid = np.where(row == 1)[0]
 
+        # if no valid points, move to the next row
         if len(valid) == 0:
             continue
 
+        # create a list to store all the valid motor positions
+        # use the indices from the mask to get the motor position values from mpos
         mval = []
-        for val in valid:
-            mval.append(mask.cx[ind][val])
+        mval.append(mpos[rmotor][ind][valid])
 
         # find the range to rock across
         minn = min(mval)
         maxx = max(mval)
 
+        # update the range list
         range.append([minn,maxx])
         
-        # get indices for start location
-        lind = np.where(mask.cx[ind] == minn)[0]
-        print(lind)
-        
-        # now update the stage object
-        stage['1'].append(mask.cx[ind][lind])
-        stage['2'].append(mask.cy[ind][lind])
+        # get indices for staging location
+        lind = np.where(mpos[rmotor] == minn)[0]
+        for motor in mpos:
+            lind = np.where(mpos[rmotor] == minn)[0]
+            stage[motor][ind].append(mpos[motor][ind][lind])
 
-      
     return range,stage
 
 def data_reduction(imArray, d, Rot, tilt, lamda, x0, y0, PP, pixelsize,
