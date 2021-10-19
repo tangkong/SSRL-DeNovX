@@ -69,7 +69,7 @@ def max_pixel_rock(dets, motor,range, sat_count=60000, md={},imgkey='Dexela'):
         # set the detector to the new value
         yield from bps.mv(det.cam.acquire_time, new_acq_time)
 
-def filter_opt_count(det, target_count=100000, md={}):
+def filter_opt_count(det, target_count=100000, det_key='dexela_image' ,md={}):
     """ filter_opt_count
     OPtimize counts using filters 
     Assumes mu=0.2, x = [0.89, 2.52, 3.83, 10.87]
@@ -90,7 +90,7 @@ def filter_opt_count(det, target_count=100000, md={}):
     run = BlueskyRun(dc)
     yield from bps.trigger_and_read([det, filter1, filter2, filter3, filter4])
 
-    data = run.primary.read()['pilatus300k_image']
+    data = run.primary.read()[det_key]
     mean = data[-1].mean().values.item() # xarray.DataArray methods
     std = data[-1].std().values.item() # xarray.DataArray methods
     curr_counts = mean + 2*std
