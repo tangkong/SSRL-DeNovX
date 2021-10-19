@@ -46,7 +46,7 @@ def find_coords(dets,motor1,motor2,guess, detKey):
     # grab the photodiode data and find the max
     xhdr = db[xid].table(fill=True)
     xarr = xhdr[detKey] # xhdr[det.name]
-    xLoc = xarr[xarr == xarr.max()]
+    xLoc = xarr[xarr == xarr.max()].iloc[0]
 
     # now move the sample stage to that location and take the other scan
     yield from bps.mv(motor1,xLoc)
@@ -57,7 +57,7 @@ def find_coords(dets,motor1,motor2,guess, detKey):
     # grab the photodiode data and find the max
     yhdr = db[yid].table(fill=True)
     yarr = yhdr[detKey]
-    yLoc = yarr[yarr == yarr.max()] #assuming a 1d array here
+    yLoc = yarr[yarr == yarr.max()].iloc[0] #assuming a 1d array here
 
     # now pass the offsets to the stage object  to reset the positions
     c_stage.correct([xLoc,yLoc])
@@ -534,7 +534,7 @@ def opt_cassette_scan(dets,motors,centers,prms,*,md=None):
     # performs a series of opt_rock_scans based on sample centers and diameters
 
     for center in centers:
-        yield from opt_rock_Scan(dets,motors,center,prms,*,md=None)
+        yield from opt_rock_scan(dets,motors,center,prms,md=md)
 
 
 
