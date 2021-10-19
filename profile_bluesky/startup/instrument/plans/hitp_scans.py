@@ -413,7 +413,7 @@ def powder_check(dets):
     plan to check the coverage of peaks on the detector. this plan takes a scan, applies some metrics to check the q/chi coverage of peaks on the detector, and reports a value.
     """
 
-
+@inject_md_decorator({'macro_name':'rock'})
 def rock(det, motor, ranges, *, stage=None, md=None):
     """
     based on Robert's rocking_scan code to include a motor staging option
@@ -475,7 +475,22 @@ def rock(det, motor, ranges, *, stage=None, md=None):
 
         return uid
 
+@inject_md_decorator({'macro_name':'opt_rock_scan'})
 def opt_rock_scan(det,motors,center,prms,*,md=None):
+    """
+    performs a check for on detector acquisition time based on a rocking scan range,
+    sets the detector acquisition time, and computes the scan
+    :param det: detector to be used
+    :type det: epics ophyd object
+    :param motors: motors to be used NOTE: first motor must be scanning motor, all other motors are for staging
+    :type motor: EpicsMotor signal
+    :param center: center of the sample to be scann [x,y]
+    :type center: list of two floats
+    :param prms: list of instrument and sample parameters prms = [dia,box,res]
+    :param prms: where dia is the sample diameter, box is the box beam size, and res is the scanning resolution
+    :type prms: list of lists
+    """
+
     # move to the sample center
     for ind,motor in enumerate(motors):
         yield from bps.mv(motor,center[ind])
@@ -500,7 +515,22 @@ def opt_rock_scan(det,motors,center,prms,*,md=None):
     yield from rock(det,motor[0],r,stage=s,md=md)
 
 # scan with adaptive optimization
+@inject_md_decorator({'macro_name':'opt_cassette_scan'})
 def opt_cassette_scan(dets,motors,centers,prms,*,md=None):
+    """
+    wrapper for performing multiple opt_rock_scans on a series of samples
+    performs a check for on detector acquisition time based on a rocking scan range,
+    sets the detector acquisition time, and computes the scan
+    :param det: detector to be used
+    :type det: epics ophyd object
+    :param motors: motors to be used rocked
+    :type motor: EpicsMotor signal
+    :param center: center of the sample to be scann [x,y]
+    :type center: list of two floats
+    :param prms: list of instrument and sample parameters prms = [dia,box,res]
+    :param prms: where dia is the sample diameter, box is the box beam size, and res is the scanning resolution
+    :type prms: list of lists
+    """
     # performs a series of opt_rock_scans based on sample centers and diameters
 
     for center in centers:

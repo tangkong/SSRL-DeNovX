@@ -266,7 +266,7 @@ def inscribe(motor1,motor2,C,dia,box,res):
     return mask, motorpos
 
 # take an inscribed area and generate rocking scan positions
-def generate_rocking_range(mask,motor):
+def generate_rocking_range(mask):
     """
     this function takes an array of motor positions and calculates ranges for a rocking scan
     it can also optionally generate a dictionary for staging the motors before each scan
