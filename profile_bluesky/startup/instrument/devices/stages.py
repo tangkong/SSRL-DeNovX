@@ -59,19 +59,6 @@ class cassetteStage(MotorBundle):
 
 c_stage = cassetteStage('', name='c_stage')
 
-class mask():
-    def __init__(self):
-        self.mask = None
-        self.cx = None
-        self.cy = None
-        return self
-
-    def update_mask(self,nmask,ncxpos,ncypos):
-        self.mask = nmask
-        self.cx = ncxpos
-        self.cy = ncypos
-        return self
-
 # measure stage status at beginning of every plan
 sd.baseline.append(c_stage)
 
