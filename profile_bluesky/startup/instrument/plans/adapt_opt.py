@@ -8,6 +8,8 @@ import bluesky.plan_stubs as bps
 import bluesky.plans as bp
 from bluesky_live.bluesky_run import BlueskyRun, DocumentCache
 
+from .helpers import sum_images
+from .hitp_scans import rock
 from ..devices.misc_devices import filter1, filter2, filter3, filter4
 
 
@@ -33,9 +35,9 @@ def max_pixel_count(dets, sat_count=60000, md={}):
         yield from bps.trigger_and_read(det)
         curr_acq_time = det.cam.acquire_time.get()
         # =================== BIG IF, DOES THIS EXIST
-        curr_max_counts = det.max_count.get()
+        curr_max_counts = det.highest_pixel.get()
         # ============================================
-        new_acq_time = round(sat_count / curr_max_counts * curr_acquire_time, 2)
+        new_acq_time = round(sat_count / curr_max_counts * curr_acq_time, 2)
 
         yield from bps.mv(det.cam.acquire_time, new_acq_time)
 
@@ -58,7 +60,7 @@ def max_pixel_rock(dets, motor,range, sat_count=60000, md={},imgkey='Dexela'):
         # perform a rocking scan
         uid = yield from rock(dets,motor,range)
         # grab the image
-        sarr = sum_image(ind=-1,imgkey = imgkey)
+        sarr = sum_images(ind=-1,imgkey = imgkey)
         # find the max pixel count on the image
         curr_max_counts = np.max(sarr)
         # get the current detector acquisition time
