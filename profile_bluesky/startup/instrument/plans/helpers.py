@@ -7,13 +7,13 @@ from ..devices.misc_devices import filter1, filter2, filter3, filter4
 import matplotlib.pyplot as plt
 import numpy as np
 
-__all__ = ['show_table', 'show_image', 'show_scan', 'avg_images', 'filters','inscribe','generate_rocking_range',
+__all__ = ['show_table', 'show_image', 'show_scan', 'avg_images','sum_images', 'filters','inscribe','generate_rocking_range',
            'data_reduction']
 
 def show_table(ind=-1):
     return db[ind].table()
 
-def show_image(ind=-1, data_pt=1, img_key='pilatus300k_image', max_val=500000):
+def show_image(ind=-1, data_pt=1, img_key='dexela_image', max_val=500000):
     """show_image attempts to plot area detector data, plot a vertical slice, 
     and calculates number of pixels above the provided threshold.  
 
@@ -27,16 +27,16 @@ def show_image(ind=-1, data_pt=1, img_key='pilatus300k_image', max_val=500000):
     :type max_val: int, optional
     """
     # Try databroker v2 maybe, at some point
-    if img_key in ['pilatus300k_image']:
-        horizontal=True
-    else:
-        horizontal=False
+    #if img_key in ['pilatus300k_image']:
+    #    horizontal=True
+    #else:
+    #    horizontal=False
 
     try:
         hdr = db[ind].table(fill=True)
         arr = hdr[img_key][data_pt][0]
-        if horizontal:
-            arr = np.rot90(arr, -1)
+        #if horizontal:
+        #    arr = np.rot90(arr, -1)
     except KeyError:
         print(f'{img_key} not found in run: {ind}, data point: {data_pt}')
         return
@@ -138,7 +138,7 @@ def avg_images(ind=-1,img_key='Dexela'):
     return avg_arr
 
 
-def sum_images(ind=-1, img_key='Dexela'):
+def sum_images(ind=-1, img_key='dexela_image'):
     """sum_images [summary]
 
     [extended_summary]
@@ -163,6 +163,8 @@ def sum_images(ind=-1, img_key='Dexela'):
     arr = []
     for i in range(len(df)):
         arr.append(df[img_key][i + 1][0])
+
+    arr = np.sum(arr,axis=0)
 
     return arr
 
@@ -197,8 +199,10 @@ def inscribe(motor1,motor2,C,dia,box,res):
     :type box: list
     :param res: number of points to generate along each direction
     :type res: list of size for each dimension
-    :return xacc,yacc: mask of valid motor positions
-    :type xacc,yacc: lists of floats
+    :return mmask: mask of valid motor positions
+    :rtype mmask: 2d array
+    :return mpos: motor positions corresponding to mmask
+    :rtype mpos: dict
     """
 
     # convert the C list to an array because
@@ -238,8 +242,8 @@ def inscribe(motor1,motor2,C,dia,box,res):
     for ind1,ii in enumerate(xarr):
         for ind2,jj in enumerate(yarr):
             # place the motor positions at that location
-            ypos[ind1,ind2] = ii
-            xpos[ind1,ind2] = jj
+            xpos[ind2,ind1] = ii
+            ypos[ind2,ind1] = jj
 
             # find the corner of the box
             bnds = [C - [ii-w/2,jj-h/2], # bottom left corner
@@ -275,8 +279,8 @@ def generate_rocking_range(rmotor, mask,mpos,transpose = False):
     :return ranges,stage: list of [min.max] values to rock across, dictionary of staging positions
     """
 
-    range = []
-    stage = {}
+    ranger = []
+    stage  = {}
     for motor in mpos:
         stage[motor] = {}
 
@@ -295,30 +299,25 @@ def generate_rocking_range(rmotor, mask,mpos,transpose = False):
 
         # find valid indices that equal 1
         valid = np.where(row == 1)[0]
-
         # if no valid points, move to the next row
         if len(valid) == 0:
             continue
 
         # create a list to store all the valid motor positions
         # use the indices from the mask to get the motor position values from mpos
-        mval = []
-        mval.append(mpos[rmotor][ind][valid])
-
         # find the range to rock across
-        minn = min(mval)
-        maxx = max(mval)
+        minn = min(mpos[rmotor][ind][valid])
+        maxx = max(mpos[rmotor][ind][valid])
 
         # update the range list
-        range.append([minn,maxx])
+        ranger.append([minn,maxx])
         
-        # get indices for staging location
-        lind = np.where(mpos[rmotor] == minn)[0]
         for motor in mpos:
-            lind = np.where(mpos[rmotor] == minn)[0]
+            #get index for staring motor value
+            lind = np.where(mpos[rmotor][ind] == minn)[0]
             stage[motor][ind].append(mpos[motor][ind][lind])
 
-    return range,stage
+    return ranger,stage
 
 def data_reduction(imArray, d, Rot, tilt, lamda, x0, y0, PP, pixelsize,
                    QRange=None, ChiRange=None):
