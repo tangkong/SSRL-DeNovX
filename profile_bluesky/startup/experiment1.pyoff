@@ -1,32 +1,36 @@
 # this is a development script for testing out functionalities that have been written
 # you can think of it as virtually stepping through a real diffraction experiment
 
-# first we want to get the stage aligned
-# make some simple definitions
-cx = c_stage.cx
-cy = c_stage.cy
-
 # give a rough estimate for where the cradle pinhole is
 guess = [0.1,0.1]
 
+# need to define the beamstop detector
+# bmDet = EpicsMotor? 
+
 # now use find_coords to align the frame based on your guess location
 # need to assign a detector key for the databroker
-detKey = 'Dexela'
-yield from find_coords(dexDet,cx,cy,guess,detKey) # stage locations should be aligned now
-
+img_key = 'dexela_image'
+RE(find_coords(dexDet,cx,cy,guess,img_key)
+#test and pass for acquisition; finding maximum not tested because photodiode 
+# not set up
+#
+#
 # move to the first calibrant location
-calib1 = c_stage.loc('calib1')[0]
-yield from bps.mv(cx,calib1[0],cy,calib1[1])
+calib1 = c_stage.loc(['calib1'])[0]
+RE(bps.mv(cx,calib1[0],cy,calib1[1]))
+# test and pass
 
 # set the filter box based on the calibrant
 # define a target count value
 tVal = 10e6
-yield from filter_opt_count(dexDet,target_count=tVal)
+RE(filter_opt_count(dexDet,target_count=tVal))
+# test and pass, except the filter box isn't connected to so navlues set
 
 # set the acquisition time based on the calibrant
 # define a saturation count
 sVal = 6*10e6
-yield from max_pixel_count(dexDet,sat_count=sVal)
+RE(max_pixel_count(dexDet,sat_count=sVal))
+#test and pass
 
 # inscribe the calibrant material and take a rocking scan
 # use calib1 for the sample center
@@ -36,18 +40,15 @@ res = [10,20] # desired mesh resolution
 
 # inscribe the motor locations
 mmask,mpos = inscribe(cx,cy,calib1,dia,box,res)
-
-# update the motor sample mask
-mask.update_mask(mask,mmask,mpos[cx],mpos[cy])
+#tested and passed
 
 # create ranges to rock across
 r,s = generate_rocking_range(mask,cx)
+#tested and passed
 
 # # perform the rocking scan
 # uid = yield from rock([dexDet],cx,r,stage=s)
-#
-# # grab all the data from the rocking scan
-# hdr = db[uid].table(fill=True)
+#tested and passed
 #
 # # take the sum of all the data you just collected
 # sarr = sum_images(ind=-1,img_key = imgKey)

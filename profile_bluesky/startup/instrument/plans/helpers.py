@@ -293,15 +293,15 @@ def generate_rocking_range(rmotor, mask,mpos,transpose = False):
     # go through rows (columns) of the mask
     for ind,row in enumerate(mask):
 
-        # set up the motor stage dict
-        for motor in mpos:
-            stage[motor][ind] = []
-
         # find valid indices that equal 1
         valid = np.where(row == 1)[0]
         # if no valid points, move to the next row
         if len(valid) == 0:
             continue
+
+        # set up the motor stage dict
+        for motor in mpos:
+            stage[motor][ind] = []
 
         # create a list to store all the valid motor positions
         # use the indices from the mask to get the motor position values from mpos
