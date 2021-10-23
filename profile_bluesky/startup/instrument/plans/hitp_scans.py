@@ -12,6 +12,7 @@ import bluesky.plans as bp
 from bluesky.preprocessors import inject_md_decorator 
 import bluesky.plan_stubs as bps
 from ssrltools.plans import meshcirc, nscan, level_stage_single
+import numpy as np
 
 __all__ = ['find_coords', 'sample_scan','cassette_scan', 'dark_light_plan', 'exp_time_plan', 'gather_plot_ims',
             'plot_dark_corrected', 'multi_acquire_plan', 'level_stage_single','rock','opt_rock_scan',
@@ -21,7 +22,7 @@ __all__ = ['find_coords', 'sample_scan','cassette_scan', 'dark_light_plan', 'exp
 
 # center the cassette sample coordinates on the motor stage
 @inject_md_decorator({'macro_name':'find_coords'})
-def find_coords(dets,motor1,motor2,guess, detKey):
+def find_coords(dets,motor1,motor2,guess,delt=1,num=50):
     """
     find_coords takes a guess for the pinhole center, performs a scan,
     then assigns the motor coordinates of each sample
@@ -36,28 +37,50 @@ def find_coords(dets,motor1,motor2,guess, detKey):
     :type center: list with two motor position entires [motor1, motor2]
     """
 
-    # TODO:
-    # grab pinhole bounds from casslocs.csv and scan based on that
-    # determine how many points to scan in each direction
+    # move the motor to the guess positions
+    yield from bps.mv(motor1,guess[0],motor2,guess[1])
 
-    # first take a scan in the motor1 direction
-    xid = yield from bp.scan([dets],motor1,guess[0] - 0.65,guess[0]+0.65,num=25)
+    # do the scan twice
+    count = 0
+    while count < 2:
 
-    # grab the photodiode data and find the max
-    xhdr = db[xid].table(fill=True)
-    xarr = xhdr[detKey] # xhdr[det.name]
-    xLoc = xarr[xarr == xarr.max()].iloc[0]
+        # first take a scan in the motor1 direction
+        xid = yield from bp.scan([dets],motor1,guess[0] - delt,guess[0]+delt,num=num)
 
-    # now move the sample stage to that location and take the other scan
-    yield from bps.mv(motor1,xLoc)
+        # grab the photodiode data and find the max
+        xhdr = db[xid].table(fill=True) # generate data table
+        xarr = xhdr[dets.name] #grab the detector data
+        xPos = xhdr[motor1.name] # grab the motor positions
+        xInd = np.where(xarr == np.max(xarr))[0] # find the max value of the det
+        if len(xInd) > 1:
+            xInd = np.take(xInd,len(xInd)//2) # check for multiple maxs: choose middle value
+        xInd = xInd[0]
+        xLoc = xPos[xInd]
 
-    # now take the scan in the motor2 direction
-    yid = yield from bp.scan([dets],motor2,guess[1]-0.65, guess[1]+0.65,num=25)
+        # now move the sample stage to that location and take the other scan
+        yield from bps.mv(motor1,xLoc)
 
-    # grab the photodiode data and find the max
-    yhdr = db[yid].table(fill=True)
-    yarr = yhdr[detKey]
-    yLoc = yarr[yarr == yarr.max()].iloc[0] #assuming a 1d array here
+        # now take the scan in the motor2 direction
+        yid = yield from bp.scan([dets],motor2,guess[1]-delt, guess[1]+delt,num=num)
+
+        # grab the photodiode data and find the max
+        yhdr = db[yid].table(fill=True) # generate data table
+        yarr = yhdr[dets.name] # get the detector data
+        yPos = yhdr[motor2.name] # motor positions
+        yInd = np.where(yarr == np.max(yarr))[0] # find the max value
+        if len (yInd) > 1:
+            yInd = np.take(yInd,len(yInd)//2)
+        yInd = yInd[0]
+        yLoc = yPos[yInd]
+
+        # move the motor to the max values
+        yield from bps.mv(motor1,xLoc,motor2,yLoc)
+
+        # set the new guess to be your current max values
+        guess = [xLoc,yLoc]
+
+        # index the count
+        count+=1
 
     # now pass the offsets to the stage object  to reset the positions
     c_stage.correct([xLoc,yLoc])
@@ -441,18 +464,21 @@ def rock(det, motor, ranges, *, stage=None, md=None):
     exposure_time = det.cam.acquire_time.get()
     start_pos = motor.user_readback.get()
 
-    for ind,range in enumerate(ranges):
+    for ind,ranger in enumerate(ranges):
+        print(ind)
         # get the motor limits
-        minn = range[0]
-        maxx = range[1]
+        minn = ranger[0]
+        maxx = ranger[1]
 
         # stage the motors/detectors in the correct position
         if stage:
             # stage is a dictionary with n many dictionaries inside
             # each inner diction has a key-value pair of motor-position
             # iterate through each motor and set the position
-            for k,v in stage[ind].items():
-                yield from bps.mv(k,v)
+            for motor in stage:
+                print(stage[motor][ind])
+                yield from bps.mv(motor,stage[motor][ind])
+
 
         yield from bps.stage(det)
         yield from bps.trigger(det, wait=False)
@@ -461,8 +487,8 @@ def rock(det, motor, ranges, *, stage=None, md=None):
         now = time.time()
 
         while (now - start) < exposure_time:
-            yield from bps.mvr(motor, maxx)
-            yield from bps.mvr(motor, minn)
+            yield from bps.mv(motor, maxx)
+            yield from bps.mv(motor, minn)
             now = time.time()
 
         yield from bps.create('primary')
@@ -473,7 +499,7 @@ def rock(det, motor, ranges, *, stage=None, md=None):
         # reset position
         yield from bps.mv(motor, start_pos)
 
-        return uid
+        #return uid
 
 @inject_md_decorator({'macro_name':'opt_rock_scan'})
 def opt_rock_scan(det,motors,center,prms,*,md=None):

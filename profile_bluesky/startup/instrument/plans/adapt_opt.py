@@ -11,7 +11,7 @@ from bluesky_live.bluesky_run import BlueskyRun, DocumentCache
 from .helpers import sum_images
 from .hitp_scans import rock
 from ..devices.misc_devices import filter1, filter2, filter3, filter4
-
+from ..framework import db
 
 __all__ = ['max_pixel_count','max_pixel_rock','filter_opt_count', 'solve_filter_setup','filter_thicks', 'filter_hist']
 
@@ -19,9 +19,9 @@ __all__ = ['max_pixel_count','max_pixel_rock','filter_opt_count', 'solve_filter_
 filter_hist = pd.DataFrame(columns=['time','filter_i','filter_f','I_i', 'I_f', 
                                     'I_f/I_i', 'mu', 'signal'])
 
-filter_thicks = [0.89, 2.52, 3.83, 10.87]
+filter_thicks = [0.025, 0.051, 0.127, 0.399]
 
-def max_pixel_count(dets, sat_count=60000, md={}):
+def max_pixel_count(dets, sat_count=60000, img_Key = 'dexela_image',md={}):
     """max_pixel_count 
 
     Adjust acquisition time based on max pixel count
@@ -31,22 +31,17 @@ def max_pixel_count(dets, sat_count=60000, md={}):
     """
 
     for det in dets:
-        yield from bps.open_run()
-        yield from bps.stage(det)
-        yield from bps.trigger_and_read([det])
+        uid = yield from bp.count([det])
         curr_acq_time = det.cam.acquire_time.get()
-        # =================== BIG IF, DOES THIS EXIST
-        curr_max_counts = det.highest_pixel.get()
-        # ============================================
+        hdr = db[uid].table(fill=True)
+        arr = hdr[img_Key][1]
+        curr_max_counts = np.max(arr)
         new_acq_time = round(sat_count / curr_max_counts * curr_acq_time, 2)
 
         yield from bps.mv(det.cam.acquire_time, new_acq_time)
-        yield from bps.close_run()
-    # run standard count plan with new acquire times
-    yield from bp.count(dets, md=md)
 
 
-def max_pixel_rock(dets, motor,range, sat_count=60000, md={},imgkey='Dexela'):
+def max_pixel_rock(dets, motor,ranger, sat_count=60000, md={},img_key='dexela_image'):
     """max_pixel_count
 
     Adjust acquisition time based on max pixel count
@@ -56,19 +51,18 @@ def max_pixel_rock(dets, motor,range, sat_count=60000, md={},imgkey='Dexela'):
     """
 
     for det in dets:
-        # stage the detector
-        yield from bps.stage(det)
         # perform a rocking scan
-        uid = yield from rock(dets,motor,range)
+        uid = yield from rock(det,motor,[ranger])
         # grab the image
-        sarr = sum_images(ind=-1,imgkey = imgkey)
+        sarr = sum_images(ind=-1,img_key = img_key)
         # find the max pixel count on the image
         curr_max_counts = np.max(sarr)
+        print(curr_max_counts)
         # get the current detector acquisition time
         curr_acq_time = det.cam.acquire_time.get()
         # calculate a new acquisition time based on the desired max counts
-        new_acq_time = round(sat_count / curr_max_counts * curr_acq_time, 2)
-
+        new_acq_time = round(sat_count / curr_max_counts * curr_acq_time, 4)
+        print(new_acq_time) 
         # set the detector to the new value
         yield from bps.mv(det.cam.acquire_time, new_acq_time)
 
@@ -97,16 +91,16 @@ def filter_opt_count(det, target_count=100000, det_key='dexela_image' ,md={}):
     mean = data[-1].mean().values.item() # xarray.DataArray methods
     std = data[-1].std().values.item() # xarray.DataArray methods
     curr_counts = mean + 2*std
+    print(curr_counts)
 
 
     # gather filter information and solve 
     filter_status = [round(filter1.get()/5), round(filter2.get()/5), 
                         round(filter3.get()/5), round(filter4.get()/5)]
     print(filter_status)
-    filter_status = [not e for e in filter_status]
-    new_filters = solve_filter_setup(filter_status, curr_counts, target_count)
+    filter_status = [e for e in filter_status]
+    new_filters = solve_filter_setup(filter_status, curr_counts, target_count,x = [0.025,0.051,0.127,0.399])
     # invert again to reflect filter status
-    new_filters = [not e for e in new_filters]
     print(new_filters)
     # set new filters and read.  For some reason hangs on bps.mv when going high
     filter1.put(new_filters[0]*4.9)

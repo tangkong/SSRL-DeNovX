@@ -4,7 +4,7 @@ import numpy as np
 stages 
 """
 
-__all__ = ['c_stage']
+__all__ = ['c_stage','cx','cy','detz']
 
 from ..framework import sd
 from ..session_logs import logger
@@ -16,6 +16,7 @@ class cassetteStage(MotorBundle):
     """DeNovX Cassette Holder Sample Stage"""
     cx = Cpt(EpicsMotor,'TXRD:IMS:MOTOR1',kind='hinted',labels=('sample',))
     cy = Cpt(EpicsMotor,'TXRD:IMS:MOTOR2',kind='hinted',labels=('sample',))
+    detz = Cpt(EpicsMotor,'DETZ:IMS:MOTOR1',kind='hinted',labels=('sample',))
 
     # TODO: can't find the .csv file in this directory, need to fix 
     # import the absolute sample positions
@@ -58,6 +59,9 @@ class cassetteStage(MotorBundle):
         return self
 
 c_stage = cassetteStage('', name='c_stage')
+cx = c_stage.cx
+cy = c_stage.cy
+detz = c_stage.detz
 
 # measure stage status at beginning of every plan
 sd.baseline.append(c_stage)

@@ -282,7 +282,7 @@ def generate_rocking_range(rmotor, mask,mpos,transpose = False):
     ranger = []
     stage  = {}
     for motor in mpos:
-        stage[motor] = {}
+        stage[motor] = []
 
     # take transpose if asked
     if transpose:
@@ -299,10 +299,6 @@ def generate_rocking_range(rmotor, mask,mpos,transpose = False):
         if len(valid) == 0:
             continue
 
-        # set up the motor stage dict
-        for motor in mpos:
-            stage[motor][ind] = []
-
         # create a list to store all the valid motor positions
         # use the indices from the mask to get the motor position values from mpos
         # find the range to rock across
@@ -315,7 +311,7 @@ def generate_rocking_range(rmotor, mask,mpos,transpose = False):
         for motor in mpos:
             #get index for staring motor value
             lind = np.where(mpos[rmotor][ind] == minn)[0]
-            stage[motor][ind].append(mpos[motor][ind][lind])
+            stage[motor].append(mpos[motor][ind][lind])
 
     return ranger,stage
 
