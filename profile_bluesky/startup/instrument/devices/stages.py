@@ -66,3 +66,5 @@ detz = c_stage.detz
 # measure stage status at beginning of every plan
 sd.baseline.append(c_stage)
 
+
+

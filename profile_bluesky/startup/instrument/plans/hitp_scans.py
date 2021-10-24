@@ -5,6 +5,7 @@ scans for high throughput stage
 from ..devices.stages import c_stage
 from ..devices.misc_devices import shutter as fs, lrf, I0, I1, table_busy, table_trigger
 from ..framework import db
+from .helpers import *
 
 import time 
 import matplotlib.pyplot as plt
@@ -16,7 +17,7 @@ import numpy as np
 
 __all__ = ['find_coords', 'sample_scan','cassette_scan', 'dark_light_plan', 'exp_time_plan', 'gather_plot_ims',
             'plot_dark_corrected', 'multi_acquire_plan', 'level_stage_single','rock','opt_rock_scan',
-           'opt_cassette_scan']
+           'opt_cassette_scan','max_pixel_rock']
 
 
 
@@ -54,7 +55,8 @@ def find_coords(dets,motor1,motor2,guess,delt=1,num=50):
         xInd = np.where(xarr == np.max(xarr))[0] # find the max value of the det
         if len(xInd) > 1:
             xInd = np.take(xInd,len(xInd)//2) # check for multiple maxs: choose middle value
-        xInd = xInd[0]
+        if type(xInd) != np.int64:
+            xInd = xInd[0]
         xLoc = xPos[xInd]
 
         # now move the sample stage to that location and take the other scan
@@ -70,7 +72,8 @@ def find_coords(dets,motor1,motor2,guess,delt=1,num=50):
         yInd = np.where(yarr == np.max(yarr))[0] # find the max value
         if len (yInd) > 1:
             yInd = np.take(yInd,len(yInd)//2)
-        yInd = yInd[0]
+        if type(yInd) != np.int64:
+            yInd = yInd[0]
         yLoc = yPos[yInd]
 
         # move the motor to the max values
@@ -149,10 +152,8 @@ def dark_light_plan(dets, shutter=fs, md={}):
         - Close shutter, take image, open shutter, take image, close shutter
         dets : detectors to read from
         motors : motors to take readings from (not fully implemented yet)
-        fs : Fast shutter, high is closed
         sample_name : the sample name
         Example usage:
-        >>> RE(dark_light_plan())
     '''
     if I0 not in dets:
         dets.append(I0)
@@ -464,8 +465,9 @@ def rock(det, motor, ranges, *, stage=None, md=None):
     exposure_time = det.cam.acquire_time.get()
     start_pos = motor.user_readback.get()
 
+    yield from bps.stage(det)
+    
     for ind,ranger in enumerate(ranges):
-        print(ind)
         # get the motor limits
         minn = ranger[0]
         maxx = ranger[1]
@@ -475,34 +477,40 @@ def rock(det, motor, ranges, *, stage=None, md=None):
             # stage is a dictionary with n many dictionaries inside
             # each inner diction has a key-value pair of motor-position
             # iterate through each motor and set the position
-            for motor in stage:
-                print(stage[motor][ind])
-                yield from bps.mv(motor,stage[motor][ind])
+            for m in stage:
+                print('Motor to stage:' + str(m.name))
+                print('Staging position:' + str(stage[m][ind]))
+                yield from bps.mv(m,stage[m][ind])
 
-
-        yield from bps.stage(det)
-        yield from bps.trigger(det, wait=False)
-
+        trig_status = (yield from bps.trigger(det,wait=False))
+        print(trig_status)
         start = time.time()
         now = time.time()
 
-        while (now - start) < exposure_time:
+        #while ((now - start ) < exposure_time) or (not trig_status.done):
+        while not trig_status.done:
             yield from bps.mv(motor, maxx)
             yield from bps.mv(motor, minn)
             now = time.time()
-
+        
+        print(trig_status) 
         yield from bps.create('primary')
         reading = (yield from bps.read(det))
         yield from bps.save()
-        yield from bps.close_run()
+    
+    yield from bps.close_run()
+    yield from bps.unstage(det)
 
-        # reset position
-        yield from bps.mv(motor, start_pos)
+    # reset position
+    yield from bps.mv(motor, start_pos)
 
-        #return uid
+    return uid
+
+
+
 
 @inject_md_decorator({'macro_name':'opt_rock_scan'})
-def opt_rock_scan(det,motors,center,prms,*,md=None):
+def opt_rock_scan(det,motors,center,prms,*,sat_count=1e4,md=None):
     """
     performs a check for on detector acquisition time based on a rocking scan range,
     sets the detector acquisition time, and computes the scan
@@ -526,19 +534,31 @@ def opt_rock_scan(det,motors,center,prms,*,md=None):
     box = prms[1]
     res = prms[2]
     # inscribe everything
-    mmask, mpos = inscribe(motor[0], motor[1], calib1, dia, box, res)
-    # update the mask
-    mask.update_mask(mask,mmask,mpos[motor[0]],mpos[motor[1]])
+    mmask, mpos = inscribe(motors[0], motors[1], center, dia, box, res)
     # get the range to rock across
-    r,s = generate_rocking_range(mask,motor[0])
+    r,s = generate_rocking_range(motors[0],mmask,mpos)
     # pull out the longest scan
-    cRange = [min(r),max(r)]
+    
+    cRange = [center[0],center[0]]
+
+    # find the longest rock scan in the ranges
+    # lol logic
+    for rr in r:
+        minn = min(rr)
+        maxx = max(rr)
+        if minn < cRange[0]:
+            cRange[0] = minn
+        if maxx > cRange[1]:
+            cRange[1] = maxx
+
     # optimize acquisition time based on a test scan in this range
-    yield from max_pixel_rock(det,motor[0],cRange,sat_count=6*10e6)
+    #yield from max_pixel_rock([det],motors[0],cRange,sat_count=1e4)
+
+    print('Detector Acq Time: ' + str(det.cam.acquire_time.get()))
 
     # now perform the rocking scan
     # TODO: need to set up the databroker so that this experiment is recorded
-    yield from rock(det,motor[0],r,stage=s,md=md)
+    yield from rock(det,motors[0],r,stage=s,md=md)
 
 # scan with adaptive optimization
 @inject_md_decorator({'macro_name':'opt_cassette_scan'})
@@ -562,7 +582,42 @@ def opt_cassette_scan(dets,motors,centers,prms,*,md=None):
     for center in centers:
         yield from opt_rock_scan(dets,motors,center,prms,md=md)
 
+@inject_md_decorator({'macro_name':'max_pixel_rock'})
+def max_pixel_rock(dets, motor,ranger, sat_count=1e4, md={},img_key='dexela_image'):
+    """max_pixel_count
 
+    Adjust acquisition time based on max pixel count
+    Assume each det in dets has an attribute det.max_count.
+    Assume counts are linear with time.
+    Scale acquisition time to make det.max_count.get()=sat_count
+    """
 
+    for det in dets:
+        n = 0
 
+        curr_max_counts = 1e10
+        while curr_max_counts > sat_count:
+            # perform a rocking scan
+            uid = yield from rock(det,motor,[ranger])
+            # grab the image
+            sarr = sum_images(ind=-1,img_key = img_key)
+            # find the max pixel count on the image
+            curr_max_counts = np.max(sarr)
+            # get the current detector acquisition time
+            curr_acq_time = det.cam.acquire_time.get()
+            # calculate a new acquisition time based on the desired max counts
+            new_acq_time = round(sat_count / curr_max_counts * curr_acq_time, 4)
 
+            if new_acq_time > 600:
+                print('Acquisition time too long!! Resetting to 1.')
+                new_acq_time = 1
+
+            # set the detector to the new value
+            yield from bps.mv(det.cam.acquire_time, new_acq_time)
+
+            n+=1
+
+            if n == 5:
+                break
+
+        print('Final Acquisition Time: ' + str(new_acq_time))

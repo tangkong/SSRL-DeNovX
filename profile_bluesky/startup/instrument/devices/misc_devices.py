@@ -1,7 +1,7 @@
 """
 Miscellaneous devices
 """
-__all__ = ['shutter', 'I1', 'I0', 'lrf', 'table_trigger', 'table_busy',
+__all__ = ['filt','shutter', 'I1', 'I0', 'lrf', 'table_trigger', 'table_busy',
             'filter1', 'filter2', 'filter3', 'filter4','bstop']
 
 from ophyd import EpicsSignalRO, EpicsSignal, Device, Component as Cpt
@@ -22,50 +22,45 @@ filter4 = EpicsSignal('TXRD:RIO.DO11', name='filter4')
 
 bstop = EpicsSignal('TXRD:RIO.AI2',kind='hinted',name='bstop')
 
-#class FilterBox(Device):
-#    filter1 = Cpt(EpicsSignal, 'TXRD:RIO.DO08')
-#    filter2 = Cpt(EpicsSignal, 'TXRD:RIO.DO09')
-#    filter3 = Cpt(EpicsSignal, 'TXRD:RIO.DO10')
-#    filter4 = Cpt(EpicsSignal, 'TXRD:RIO.DO11')
+class FilterBox(Device):
+    filter1 = Cpt(EpicsSignal, 'TXRD:RIO.DO08')
+    filter2 = Cpt(EpicsSignal, 'TXRD:RIO.DO09')
+    filter3 = Cpt(EpicsSignal, 'TXRD:RIO.DO10')
+    filter4 = Cpt(EpicsSignal, 'TXRD:RIO.DO11')
 
-#    _filter_list = [filter1, filter2, filter3, filter4]
-#    valid_open_values = ['open', 'opened']
-#    valid_close_values = ['close', 'closed']
+    ### etymology for filters
+    ### in == in the path of the beam
+    ### out == not in the path of the beam
 
-#    open_value = 0
-#    close_value = 1
+    _filter_list = [filter1, filter2, filter3, filter4]
 
-#    def __init__(self, prefix, *, config=[1,1,1,1], **kwargs):
-#        """ Register components and initialize with configuration 
-#        filter_box = FilterBox()
-#        """
-#        self.config = config
-#        self.thicks = [0.025, 0.051, 0.127, 0.399]
+    in_value = 1
+    out_value = 0
 
-#        # set filters
-#        for i in range(4):
-#            self.set_filter(i, 'close')
+    # time is short, hardcoding this
+    def set(self,num,state):
+        if state != 0 and state != 1:
+            print('Not a valid filter state. Please use 0 (out) or 1 (in).')
+        else:
+            if num == 1:
+                self.filter1.set(state)
+            if num == 2:
+                self.filter2.set(state)
+            if num == 3:
+                self.filter3.set(state)
+            if num == 4:
+                self.filter4.set(state)
 
-#        super().__init__(prefix, **kwargs)
-        
+    def none(self):
+        self.filter1.set(0)
+        self.filter2.set(0)
+        self.filter3.set(0)
+        self.filter4.set(0)
 
-#    def set_filter(self, num, state):
-#        """ set filter in or out"""
+    def all(self):
+        self.filter1.set(1)
+        self.filter2.set(1)
+        self.filter3.set(1)
+        self.filter4.set(1)
 
-#        if state in self.valid_open_values:
-#            self._filter_list[num].set(self.open_value)
-#        elif state in self.valid_close_values:
-#            self._filter_list[num].set(self.close_value)
-#        else: 
-#            raise ValueError('setting not a valid open or close state')
-    
-#    def status(self):
-#        print('status:.....')
-
-#    def step_up(self):
-#        print('filters incremented')
-    
-#    def step_down(self):
-#        print('filters decremented')
-
-#fbox = FilterBox('',name='fbox')
+filt = FilterBox('',name='filt')

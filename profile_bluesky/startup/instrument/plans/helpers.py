@@ -4,16 +4,17 @@ Helper plans, functions
 """
 from ..framework.initialize import db
 from ..devices.misc_devices import filter1, filter2, filter3, filter4
+from ..devices.stages import c_stage
 import matplotlib.pyplot as plt
 import numpy as np
 
 __all__ = ['show_table', 'show_image', 'show_scan', 'avg_images','sum_images', 'filters','inscribe','generate_rocking_range',
-           'data_reduction']
+           'data_reduction','wmx','wmy','dist']
 
 def show_table(ind=-1):
     return db[ind].table()
 
-def show_image(ind=-1, data_pt=1, img_key='dexela_image', max_val=500000):
+def show_image(ind=-1, data_pt=1, img_key='dexela_image', max_val=16000):
     """show_image attempts to plot area detector data, plot a vertical slice, 
     and calculates number of pixels above the provided threshold.  
 
@@ -372,3 +373,14 @@ def data_reduction(imArray, d, Rot, tilt, lamda, x0, y0, PP, pixelsize,
     chi = chi - centerChi
 
     return Q, chi, cake, Qlist, IntAve
+
+#spec wmx
+def wmx():
+    return c_stage.cx.user_readback.get()
+
+def wmy():
+    return c_stage.cy.user_readback.get()
+
+def dist():
+    return c_stage.detz.user_readback.get()
+

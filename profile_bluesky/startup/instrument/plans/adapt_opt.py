@@ -13,7 +13,7 @@ from .hitp_scans import rock
 from ..devices.misc_devices import filter1, filter2, filter3, filter4
 from ..framework import db
 
-__all__ = ['max_pixel_count','max_pixel_rock','filter_opt_count', 'solve_filter_setup','filter_thicks', 'filter_hist']
+__all__ = ['max_pixel_count','old_max_pixel_rock','filter_opt_count', 'solve_filter_setup','filter_thicks', 'filter_hist']
 
 # dataframe to record intensity and filter information.  
 filter_hist = pd.DataFrame(columns=['time','filter_i','filter_f','I_i', 'I_f', 
@@ -41,7 +41,7 @@ def max_pixel_count(dets, sat_count=60000, img_Key = 'dexela_image',md={}):
         yield from bps.mv(det.cam.acquire_time, new_acq_time)
 
 
-def max_pixel_rock(dets, motor,ranger, sat_count=60000, md={},img_key='dexela_image'):
+def old_max_pixel_rock(dets, motor,ranger, sat_count=60000, md={},img_key='dexela_image'):
     """max_pixel_count
 
     Adjust acquisition time based on max pixel count
