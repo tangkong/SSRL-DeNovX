@@ -4,6 +4,7 @@ Miscellaneous devices
 __all__ = ['filt','shutter', 'I1', 'I0', 'lrf', 'table_trigger', 'table_busy',
             'filter1', 'filter2', 'filter3', 'filter4','bstop']
 
+from ..framework import sd
 from ophyd import EpicsSignalRO, EpicsSignal, Device, Component as Cpt
 
 shutter = EpicsSignal('TXRD:RIO.AO0', name='FastShutter')
@@ -64,3 +65,5 @@ class FilterBox(Device):
         self.filter4.set(1)
 
 filt = FilterBox('',name='filt')
+
+sd.baseline.append(filt)

@@ -20,16 +20,29 @@ class cassetteStage(MotorBundle):
 
     # TODO: can't find the .csv file in this directory, need to fix 
     # import the absolute sample positions
-    casslocs =pd.read_csv('/home/b_spec/.ipython/profile_DeNovX/startup/instrument/devices/casslocs.csv',header=0)
-    
-    # raw locations NOT TO BE CHANGED
-    rxlocs = -1*np.array(casslocs['x'])
-    rylocs = np.array(casslocs['y'])
+    try:
+        casslocs = pd.read_csv('/home/b_spec/.ipython/profile_DeNovX/startup/instrument/devices/casslocs_corrected.csv',header=0)
+        rawlocs = pd.read_csv('/home/b_spec/.ipython/profile_DeNovX/startup/instrument/devices/casslocs.csv',header=0)
+        rxlocs = np.array(rawlocs['x']) # !!! NOTE THE NEGATIVE ONE !!!
+        rylocs = np.array(rawlocs['y'])
+
+        # sample location values to be returned; these can be changed
+        xlocs = np.array(casslocs['x'])
+        ylocs = np.array(casslocs['y'])
+        ids = np.array(casslocs['ID'])
+
+
+    except:
+        casslocs =pd.read_csv('/home/b_spec/.ipython/profile_DeNovX/startup/instrument/devices/casslocs.csv',header=0)
+        # raw locations NOT TO BE CHANGED
+        rxlocs = np.array(casslocs['x'])
+        rylocs = np.array(casslocs['y'])
    
-    # sample location values to be returned; these can be changed
-    xlocs = -1*np.array(casslocs['x']) # !!! NOTE THE NEGATIVE 1 !!!
-    ylocs = np.array(casslocs['y'])
-    ids = np.array(casslocs['ID'])
+        # sample location values to be returned; these can be changed
+        xlocs = np.array(casslocs['x']) # !!! NOTE THE NEGATIVE 1 !!!
+        ylocs = np.array(casslocs['y'])
+        ids = np.array(casslocs['ID'])
+
     def loc(self,keys):
         """ 
         function that returns motor positions for samples based on string IDs
@@ -56,6 +69,10 @@ class cassetteStage(MotorBundle):
         """
         self.xlocs = self.rxlocs + cLocs[0] #plus based on motor directions
         self.ylocs = self.rylocs + cLocs[1] #plus based on motor directions
+
+        # write a new .csv file with the corrected locations
+        df = pd.DataFrame({'ID':self.ids,'x':self.xlocs,'y':self.ylocs})
+        df.to_csv('/home/b_spec/.ipython/profile_DeNovX/startup/instrument/devices/casslocs_corrected.csv',index=False)
         return self
 
 c_stage = cassetteStage('', name='c_stage')

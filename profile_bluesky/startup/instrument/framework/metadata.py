@@ -20,7 +20,7 @@ from .initialize import RE
 # Set up default metadata
 
 RE.md['beamline_id'] = 'SSRL 10-2 DeNovX'
-RE.md['proposal_id'] = 'testing'
+RE.md['proposal_id'] = 'DeNovXOct2021'
 RE.md['pid'] = os.getpid()
 
 HOSTNAME = socket.gethostname() or 'localhost' 
