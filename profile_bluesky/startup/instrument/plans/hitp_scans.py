@@ -895,14 +895,21 @@ def opt_survey(filt,det,bstop,stage,motors,pinguess,mesh,name,*,md=None):
 
     # this scan rocks in y, which should be motor[1]i
 
-    # open the shutter
-    yield from bps.mv(fs,5)
+    # CLOSE THE FILTER TO BEGIN
+    # and keep it closed when you don't need it
+    print('EXPERIMENT START')
+    yield from bps.mv(fs,0)
+    time.sleep(2)
 
     # clear the filters
     filt.none()
 
+    print('FIND COORDS')
+    time.sleep(2)
+    yield from bps.mv(fs,5)
     # move to the pin and calibrate the position
     yield from find_coords(bstop,motors[0],motors[1],pinguess)
+    yield from bps.mv(fs,0)
 
     # define all the locations you want to scan
     allpos = ['calib1','calib2',
@@ -920,7 +927,11 @@ def opt_survey(filt,det,bstop,stage,motors,pinguess,mesh,name,*,md=None):
             'calib1','calib2']
 
 
+
     for pos in allpos:
+        print('SAMPLE ' + str(pos))
+        time.sleep(2)
+
         # get the sample position
         c = stage.loc([pos])[0]
 
@@ -930,9 +941,18 @@ def opt_survey(filt,det,bstop,stage,motors,pinguess,mesh,name,*,md=None):
         # set the exposure time before doing filter_opt_count
         det.cam.acquire_time.set(2)
 
+        # open the shutter in preparation for filter_opt_count
+        print('FILTER OPT COUNT START')
+        yield from bps.mv(fs,5)
+        time.sleep(2)
         # first we want to test the filters and exposure time
         # aim for fewer than 1000 saturated pixels
         yield from filter_opt_count(det,motors[1],[[c[1]-2,c[1]+2]],target_count=1000)
+
+        # close the filter for computation
+        print('FILTER OPT COUNT FINISH')
+        yield from bps.mv(fs,0)
+        time.sleep(2)
 
         # now do the full rocking scan
         # first inscribe the motors
@@ -943,13 +963,23 @@ def opt_survey(filt,det,bstop,stage,motors,pinguess,mesh,name,*,md=None):
         # generate the ranges
         r,s = generate_rocking_range(motors[1],m,p,transpose=True)
 
+        # now open the shutter for the rock
+        print('ROCK START')
+        yield from bps.mv(fs,5)
+
         yield from rock(det,motors[1],r,stage=s,md={name:str(pos),'I0':I0.get(),'I1':I1.get(),'bstop':bstop.get(),'samp_center':c,'mesh':mesh,'filter1':filter1.get(),'filter2':filter2.get(),'filter3':filter3.get(),'filter4':filter4.get()})
         
+        time.sleep(2)
+        print('ROCK FINISH')
         #close the filters so you don't burn the detector
-        filt.none()
+        filt.all()
 
         # generate a run summary
-        run_summary(db[-1],name + '_' + str(pos))
+        # run_summary(db[-1],name + '_' + str(pos))
         
+        #close the shutter before the next sample
+        yield from bps.mv(fs,0)
+        time.sleep(2)
+
     # close the shutter    
     yield from bps.mv(fs,0)
