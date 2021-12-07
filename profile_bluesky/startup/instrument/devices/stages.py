@@ -6,6 +6,8 @@ stages
 
 __all__ = ['c_stage','cx','cy','detz']
 
+from pathlib import Path
+
 from ..framework import sd
 from ..session_logs import logger
 logger.info(__file__)
@@ -21,8 +23,9 @@ class cassetteStage(MotorBundle):
     # TODO: can't find the .csv file in this directory, need to fix 
     # import the absolute sample positions
     try:
-        casslocs = pd.read_csv('/home/b_spec/.ipython/profile_DeNovX/startup/instrument/devices/casslocs_corrected.csv',header=0)
-        rawlocs = pd.read_csv('/home/b_spec/.ipython/profile_DeNovX/startup/instrument/devices/casslocs.csv',header=0)
+        
+        casslocs = pd.read_csv( Path(__file__).parent / 'casslocs_corrected.csv', header=0)
+        rawlocs = pd.read_csv( Path(__file__).parent / 'casslocs.csv', header=0)
         rxlocs = np.array(rawlocs['x']) # !!! NOTE THE NEGATIVE ONE !!!
         rylocs = np.array(rawlocs['y'])
 
@@ -33,7 +36,7 @@ class cassetteStage(MotorBundle):
 
 
     except:
-        casslocs =pd.read_csv('/home/b_spec/.ipython/profile_DeNovX/startup/instrument/devices/casslocs.csv',header=0)
+        casslocs = pd.read_csv(Path(__file__).parent / 'casslocs.csv',header=0)
         # raw locations NOT TO BE CHANGED
         rxlocs = np.array(casslocs['x'])
         rylocs = np.array(casslocs['y'])
@@ -72,7 +75,7 @@ class cassetteStage(MotorBundle):
 
         # write a new .csv file with the corrected locations
         df = pd.DataFrame({'ID':self.ids,'x':self.xlocs,'y':self.ylocs})
-        df.to_csv('/home/b_spec/.ipython/profile_DeNovX/startup/instrument/devices/casslocs_corrected.csv',index=False)
+        df.to_csv( Path(__file__).parent / 'casslocs_corrected.csv',index=False)
         return self
 
 c_stage = cassetteStage('', name='c_stage')
