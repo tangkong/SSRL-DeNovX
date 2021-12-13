@@ -61,13 +61,9 @@ class DexelaDet15(SSRLDexelaDet):
         ret = super().trigger()
         #self.cam.image_mode.put(0) # Set image mode to single...
         return ret
-        
-    # Could add more attributes to file_plugin
-    # could add stage behavior
 
 
 # Connect PV's to Ophyd objects
-
 dexDet = DexelaDet15('SSRL:DEX2923:', name='dexela', 
                         read_attrs=['highest_pixel', 'tiff'])
 
