@@ -33,3 +33,34 @@ will return data from the 'i-th' run.  This is simply a wrapper for ``db[i].tabl
     |         1 | 14:32:59.1 |      0.989 |
     +-----------+------------+------------+
     generator count ['a70862bd'] (scan num: 9)
+
+
+``find_coords(dets,motor1,motor2,guess,delt=1,num=50)``:
+--------------------------------------------------------
+Function for calibrating the position of a DeNovX cassette based on a pinhole. 
+
+Cassette Plans
+===============
+
+``cassette_scan()``:
+--------------------
+Scans 48 samples in a DeNovX cassette along with two calibrant materials.
+
+``opt_cassette_scan()``:
+--------------------
+Scans 48 samples in a DeNovX cassette along with two calibrant materials using adaptive optimization to set the
+attenuating filters and detector exposure time.
+
+
+Adaptive Optimization
+=====================
+Plans for measuring, calculating, and setting various acquisition parameters like attenuation, exposure time, and
+sample surface area coverage.
+
+``max_pixel_count(det, sat_count)``:
+------------------------------------
+Takes a detector ``det`` and determines a new acquisition time based on the desired saturation count ``sat_count``.
+
+``stub_filter_opt_count(det, motor, ranges, target_count=1000, det_key='dexela_image' ,md={})``:
+-----------------------------------
+Stub plan for finding the optimal combination of attenuators for the current sample in the path of the beam.

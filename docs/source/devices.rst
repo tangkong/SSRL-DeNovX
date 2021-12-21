@@ -42,7 +42,13 @@ The two motors can be accessed individually:
 * ``c_stage.cx`` -- The x motor
 * ``c_stage.cy`` -- the y motor
 
-The variables ``cx`` and ``cy`` have also been defined to directly access each motor for convenience.
+The variables ``cx`` and ``cy`` have also been defined to directly access each motor for convenience. There are also two
+convenience functions defined:
+
+* wmx() -- returns the current position (float) of the x motor
+* wmy() -- returns the current position (float) of the y motor
+
+These functions can be passed into Bluesky plans as ranges or locations to scan over.
 
 The sample stage currently has 51 sample positions predefined. There are 8 columns labeled A through F and 6 rows
 labeled 1 through 6. There are also two calibrants mounted on the sample holder. Finally, there is a Beryllium screen

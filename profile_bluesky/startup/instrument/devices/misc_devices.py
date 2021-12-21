@@ -14,7 +14,6 @@ shutter = EpicsSignal('TXRD:RIO.AO0', name='FastShutter')
 I1 = EpicsSignalRO('TXRD:RIO.AI0', name='I1')
 I0 = EpicsSignalRO('TXRD:RIO.AI1', name='I0')
 
-
 table_trigger = EpicsSignal('TXRD:RIO.DO01', name='tablev_scan trigger')
 table_busy = EpicsSignalRO('TXRD:RIO.AI3', name='tablev_scan busy')
 

@@ -192,6 +192,9 @@ def wmx():
 def wmy():
     return c_stage.cy.user_readback.get()
 
+def wm():
+    return [c_stage.cx.user_readback.get(), c_stage.cy.user_readback.get()]
+
 def dist():
     return c_stage.detz.user_readback.get()
 
