@@ -820,4 +820,8 @@ box = [0.548,0.156]
 ### calibration = [pixelsize,center x, center y, lambda, distance, tilt, rot]
 #calibration = [0.0748,120.022/0.0748,144.963/0.0748,0.72553,434.513,-1.076,317.08]
 
+# calibration = [center x, center y, wavelength, distance,tilt, rotation]
+# not totally sure what calibration this is for
+# calibration = [119.43,44.674,0.7293,454.41,0.514,280.99]
+
 calibration = [0.0748,120.08/0.0748,152.856/0.0748,0.7293,633.725,-0.648,312.76]
