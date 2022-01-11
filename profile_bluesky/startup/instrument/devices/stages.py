@@ -1,8 +1,12 @@
+import pandas as pd
+import numpy as np
 """
 stages 
 """
 
-__all__ = ['s_stage', 'px', 'py', 'pz', 'th', 'vx', 'vy']
+__all__ = ['c_stage','cx','cy','detz']
+
+from pathlib import Path
 
 from ..framework import sd
 from ..session_logs import logger
@@ -10,30 +14,77 @@ logger.info(__file__)
 
 from ophyd import Component as Cpt, MotorBundle, EpicsMotor
 
-class HiTpStage(MotorBundle):
-    """HiTp Sample Stage"""
-    #stage x, y
-    px = Cpt(EpicsMotor, 'BL00:IMS:MOTOR3', kind='hinted', labels=('sample',))
-    py = Cpt(EpicsMotor, 'BL00:IMS:MOTOR4', kind='hinted', labels=('sample',))
-    pz = Cpt(EpicsMotor, 'BL00:IMS:MOTOR2', kind='hinted', labels=('sample',))
+class cassetteStage(MotorBundle):
+    """DeNovX Cassette Holder Sample Stage"""
+    cx = Cpt(EpicsMotor,'TXRD:IMS:MOTOR1',kind='hinted',labels=('sample',))
+    cy = Cpt(EpicsMotor,'TXRD:IMS:MOTOR2',kind='hinted',labels=('sample',))
+    detz = Cpt(EpicsMotor,'DETZ:IMS:MOTOR1',kind='hinted',labels=('sample',))
 
-    # plate vert adjust motor 1, 2
-    vx = Cpt(EpicsMotor, 'BL00:PICOD1:MOTOR3', labels=('sample',))
-    vy = Cpt(EpicsMotor, 'BL00:PICOD1:MOTOR2', labels=('sample',))
+    # TODO: can't find the .csv file in this directory, need to fix 
+    # import the absolute sample positions
+    try:
+        
+        casslocs = pd.read_csv( Path(__file__).parent / 'casslocs_corrected.csv', header=0)
+        rawlocs = pd.read_csv( Path(__file__).parent / 'casslocs.csv', header=0)
+        rxlocs = np.array(rawlocs['x']) # !!! NOTE THE NEGATIVE ONE !!!
+        rylocs = np.array(rawlocs['y'])
 
-    th = Cpt(EpicsMotor, 'BL00:IMS:MOTOR1', labels=('sample',))
+        # sample location values to be returned; these can be changed
+        xlocs = np.array(casslocs['x'])
+        ylocs = np.array(casslocs['y'])
+        ids = np.array(casslocs['ID'])
 
-s_stage = HiTpStage('', name='s_stage')
+
+    except:
+        casslocs = pd.read_csv(Path(__file__).parent / 'casslocs.csv',header=0)
+        # raw locations NOT TO BE CHANGED
+        rxlocs = np.array(casslocs['x'])
+        rylocs = np.array(casslocs['y'])
+   
+        # sample location values to be returned; these can be changed
+        xlocs = np.array(casslocs['x']) # !!! NOTE THE NEGATIVE 1 !!!
+        ylocs = np.array(casslocs['y'])
+        ids = np.array(casslocs['ID'])
+
+    def loc(self,keys):
+        """ 
+        function that returns motor positions for samples based on string IDs
+        if a .csv file with ID:position pairs is provided
+        : param key: a list of string ids with an associate position
+        : type key: a variable length string
+        """
+        pos = []
+        for key in keys:
+            if key in self.ids:
+                print(key)
+                m1 = self.xlocs[np.where(self.ids == key)[0]][0]
+                m2 = self.ylocs[np.where(self.ids == key)[0]][0]
+                pos.append([m1,m2])
+        
+        return pos
+
+    def correct(self,cLocs):
+        """
+        function that takes a set of motor offsets and adjusts sample positions
+        accordingly
+        : param cLocs: motor offset positions
+        : type cLocs: list of length 2
+        """
+        self.xlocs = self.rxlocs + cLocs[0] #plus based on motor directions
+        self.ylocs = self.rylocs + cLocs[1] #plus based on motor directions
+
+        # write a new .csv file with the corrected locations
+        df = pd.DataFrame({'ID':self.ids,'x':self.xlocs,'y':self.ylocs})
+        df.to_csv( Path(__file__).parent / 'casslocs_corrected.csv',index=False)
+        return self
+
+c_stage = cassetteStage('', name='c_stage')
+cx = c_stage.cx
+cy = c_stage.cy
+detz = c_stage.detz
 
 # measure stage status at beginning of every plan
-sd.baseline.append(s_stage)
+sd.baseline.append(c_stage)
 
-# convenience definitions 
-px = s_stage.px
-py = s_stage.py
-pz = s_stage.pz
 
-vx = s_stage.vx
-vy = s_stage.vy
 
-th = s_stage.th

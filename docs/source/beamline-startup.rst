@@ -15,3 +15,7 @@ be started to render the beamline operational.
 
 To start up EPICS, the IOCs (Input-Output Controllers) must be started.  Each 
 set of devices has its own IOC
+
+Each device (see 'Devices' page for more information) used at SSRL Beamline 10-2a will have a unique address that needs
+to be defined in the bluesky ipython profile. Once defined, the devices should be loaded on startup.
+

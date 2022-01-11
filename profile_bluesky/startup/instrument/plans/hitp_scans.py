@@ -2,116 +2,151 @@
 scans for high throughput stage
 """
 
-from .locs import loc177
-from ..devices.stages import s_stage
-from ..devices.xspress3 import xsp3
+from ..devices.stages import c_stage
 from ..devices.misc_devices import shutter as fs, lrf, I0, I1, table_busy, table_trigger
+from ..devices.misc_devices import filt,filter1,filter2,filter3,filter4
 from ..framework import db
+from .helpers import show_image,inscribe,generate_rocking_range, filters, box,run_summary
+from .adapt_opt import int_to_bool_list
 
 import time 
 import matplotlib.pyplot as plt
 import bluesky.plans as bp
 from bluesky.preprocessors import inject_md_decorator 
 import bluesky.plan_stubs as bps
+from bluesky_live.bluesky_run import BlueskyRun, DocumentCache
 from ssrltools.plans import meshcirc, nscan, level_stage_single
+import numpy as np
 
-__all__ = ['loc_177_scan', 'loc_cust_scan', 'dark_light_plan', 'exp_time_plan', 'gather_plot_ims',
-            'plot_dark_corrected', 'multi_acquire_plan', 'level_stage_single', ]
+__all__ = ['find_coords', 'sample_scan','cassette_scan', 'dark_light_plan', 'exp_time_plan', 'gather_plot_ims',
+            'plot_dark_corrected', 'multi_acquire_plan', 'level_stage_single','rock','opt_rock_scan',
+    # open the shutter
+           'opt_cassette_scan','max_pixel_rock','survey','test_stats','opt_survey']
 
-# scan sample locations
-@inject_md_decorator({'macro_name': 'loc_177_scan'})
-def loc_177_scan(dets, skip=0, md={}):
-    """loc_177_scan scans across a library with 177 points, measuring each 
-    detector in dets
 
-    :param dets: detectors to be 
-    :type dets: list
-    :param skip: number of data points to skip
-    :yield: things from list_scan
-    :rtype: Msg
+
+# center the cassette sample coordinates on the motor stage
+@inject_md_decorator({'macro_name':'find_coords'})
+def find_coords(dets,motor1,motor2,guess,delt=1,num=50):
     """
-    # format locations and stage motors
-    if I0 not in dets:
-        dets.append(I0)
-    if I1 not in dets:
-        dets.append(I1)
+    find_coords takes a guess for the pinhole center, performs a scan,
+    then assigns the motor coordinates of each sample
 
-    if xsp3 in dets:
-        yield from bps.mv(xsp3.total_points, 177)
-
-    # inject logic via per_step 
-    class stateful_per_step:
-        
-        def __init__(self, skip):
-            self.skip = skip
-            self.cnt = 0
-            #print(self.skip, self.cnt)
-
-        def __call__(self, detectors, step, pos_cache):
-            """
-            has signature of bps.one_and_step, but with added logic of skipping 
-            a point if it is outside of provided radius
-            """
-            if self.cnt < self.skip: # if not enough skipped
-                self.cnt += 1
-                pass
-            else:
-                yield from bps.one_nd_step(detectors, step, pos_cache)
-
-    per_stepper = stateful_per_step(skip)
-
-    yield from bp.list_scan(dets, s_stage.px, list(loc177[0]), 
-                                s_stage.py, list(loc177[1]), 
-                                per_step=per_stepper, md=md)
-
-
-@inject_md_decorator({'macro_name': 'loc_cust_scan'})
-def loc_cust_scan(dets, cust_locs, skip=0, md={}):
-    """loc_cust_scan scans across a library with 177 points, measuring each 
-    detector in dets
-
-    :param dets: detectors to be 
-    :type dets: list
-    :param cust_locs: (2, N) array denoting N locations to scan.  First list 
-                      will direct px and the second will direct py 
-    :type cust_locs: list
-    :param skip: number of data points to skip
-    :yield: things from list_scan
-    :rtype: Msg
+    :param dets: photodiode detector to be used
+    :type dets: ophyd det object
+    :param motor1: motor for x axis
+    :type motor1: ophyd EPICS motor
+    :param motor2: motor for y axis
+    :type motor2: ophyd EPICS motor
+    :param center: inital guess for the center of the pinhole
+    :type center: list with two motor position entires [motor1, motor2]
     """
-    # format locations and stage motors
-    if I0 not in dets:
-        dets.append(I0)
-    if I1 not in dets:
-        dets.append(I1)
 
-    if xsp3 in dets:
-        yield from bps.mv(xsp3.total_points, len(cust_locs[0]))
+    # move the motor to the guess positions
+    yield from bps.mv(motor1,guess[0],motor2,guess[1])
 
-    # inject logic via per_step 
-    class stateful_per_step:
-        
-        def __init__(self, skip):
-            self.skip = skip
-            self.cnt = 0
-            #print(self.skip, self.cnt)
+    # do the scan twice
+    count = 0
+    while count < 2:
 
-        def __call__(self, detectors, step, pos_cache):
-            """
-            has signature of bps.one_and_step, but with added logic of skipping 
-            a point if it is outside of provided radius
-            """
-            if self.cnt < self.skip: # if not enough skipped
-                self.cnt += 1
-                pass
-            else:
-                yield from bps.one_nd_step(detectors, step, pos_cache)
+        # first take a scan in the motor1 direction
+        xid = yield from bp.scan([dets],motor1,guess[0] - delt,guess[0]+delt,num=num)
 
-    per_stepper = stateful_per_step(skip)
+        # grab the photodiode data and find the max
+        xhdr = db[xid].table(fill=True) # generate data table
+        xarr = xhdr[dets.name] #grab the detector data
+        xPos = xhdr[motor1.name] # grab the motor positions
+        xInd = np.where(xarr == np.max(xarr))[0] # find the max value of the det
+        if len(xInd) > 1:
+            xInd = np.take(xInd,len(xInd)//2) # check for multiple maxs: choose middle value
+        if type(xInd) != np.int64:
+            xInd = xInd[0]
+        xLoc = xPos[xInd]
 
-    yield from bp.list_scan(dets, s_stage.px, list(cust_locs[0]), 
-                                s_stage.py, list(cust_locs[1]), 
-                                per_step=per_stepper, md=md)
+        # now move the sample stage to that location and take the other scan
+        yield from bps.mv(motor1,xLoc)
+
+        # now take the scan in the motor2 direction
+        yid = yield from bp.scan([dets],motor2,guess[1]-delt, guess[1]+delt,num=num)
+
+        # grab the photodiode data and find the max
+        yhdr = db[yid].table(fill=True) # generate data table
+        yarr = yhdr[dets.name] # get the detector data
+        yPos = yhdr[motor2.name] # motor positions
+        yInd = np.where(yarr == np.max(yarr))[0] # find the max value
+        if len (yInd) > 1:
+            yInd = np.take(yInd,len(yInd)//2)
+        if type(yInd) != np.int64:
+            yInd = yInd[0]
+        yLoc = yPos[yInd]
+
+        # move the motor to the max values
+        yield from bps.mv(motor1,xLoc,motor2,yLoc)
+
+        # set the new guess to be your current max values
+        guess = [xLoc,yLoc]
+
+        # index the count
+        count+=1
+
+    # now pass the offsets to the stage object  to reset the positions
+    c_stage.correct([xLoc,yLoc])
+
+# scan a single sample in a DeNovX cassette based on its center location
+@inject_md_decorator({'macro_name':'sample_scan'})
+def sample_scan(dets,motor1,motor2,center):
+    """
+    sample_scan starts at the center of a a single DeNovX sample and executes a list_scan within the boundaries of the sample geometry
+
+    :param dets: detectors to be used
+    :type dets: list
+    :param motor1: first motor to be used
+    # open the shutter
+    :type motor1: ophyd EPICS motor
+    :param motor2: second motor to be used
+    :type motor2: ophyd EPICS motor
+    :param center: two positions defining center of sample
+    :type center: list of floats
+
+    :yield: results from list_scan
+    """
+
+    ### TODO: make boundaries an arg, calculate from arbitrary boundaries
+
+    # define the boundaries on the sample
+    xWid = 10
+    yWid = 10
+
+    xHigh = center[0] + xwid/2
+    xLow = center[0] - xWid/2
+
+    yhigh = center[1] + yWid/2
+    yLow = center[1] - yWid/2
+    
+    # get all scan locations for list_scan
+    scan_locs = np.vstack((np.linspace(xLow,xHigh),np.linspace(yLow,yHigh)))
+
+    yield from list_scan([dets],motor1,list(scan_locs[0]),motor2,list(scan_locs[1]))
+
+# scan all samples in a DeNovX cassette
+@inject_md_decorator({'macro_name':'cassette_scan'})
+def cassette_scan(dets,motor1,motor2,corr_locs,skip=0,md={}):
+    """ cassette_scan moves to the center of each point on a DeNovX and executesa pre-defined scan in each location
+
+    :param dets: detectors to be used
+    :type dets: list
+    :param motor1: first stage motor to be used
+    :type motor1: ophyd EPICS motor
+    :param motor2: second stage to be used
+    :type motor2: ophyd EPICS motor
+    :param skip: number of datapoints to skip
+    :yield: results from sample_scan
+    """
+
+    # iterate through each center location and execute a sample scan
+    for center in corr_locs:
+        yield from sample_scan(dets,motor1,motor2,center)
+
 
 # collection plans
 # Basic dark > light collection plan
@@ -122,10 +157,8 @@ def dark_light_plan(dets, shutter=fs, md={}):
         - Close shutter, take image, open shutter, take image, close shutter
         dets : detectors to read from
         motors : motors to take readings from (not fully implemented yet)
-        fs : Fast shutter, high is closed
         sample_name : the sample name
         Example usage:
-        >>> RE(dark_light_plan())
     '''
     if I0 not in dets:
         dets.append(I0)
@@ -258,16 +291,6 @@ def plot_dark_corrected(hdrs):
     bkgd_subbed[ bkgd_subbed < 0 ] = 0
     plt.imshow(bkgd_subbed, vmax = bkgd_subbed.mean() + 3*bkgd_subbed.std())
 
-def plot_MCA(hdrs):
-    '''Plot MCA's from given hdr
-    '''
-    plt.figure()
-    data = hdrs.table(fill=True)['xsp3_channel1'][1]
-
-    plt.plot(data)
-    plt.xlabel('Energy (keV)')
-    plt.ylabel('Total counts')
-
 @inject_md_decorator({'macro_name':'multi_acquire_plan'})
 def multi_acquire_plan(det, acq_time, reps): 
     '''multiple acquisition run.  Single dark image, multiple light
@@ -284,20 +307,6 @@ def multi_acquire_plan(det, acq_time, reps):
         light_uids.append(light_uid) 
     
     return (dark_uid, light_uids) 
-
-@inject_md_decorator({'macro_name': 'level_s_stage'})    
-def level_s_stage():
-    """level_s_stage level s_stage vx, vy
-
-    double wafer stage: (-85, 85), (-58, 85)
-    """
-    # level on y axis
-    yield from bps.mv(s_stage.px, 0, s_stage.py, 0)
-    yield from level_stage_single(lrf, s_stage.vx, s_stage.px, -50, 50)
-
-    # level on x axis
-    yield from bps.mv(s_stage.px, 0, s_stage.py, 0)
-    yield from level_stage_single(lrf, s_stage.vy, s_stage.py, 60, -60)
 
 
 @inject_md_decorator({'marco_name': 'tablev_scan'})
@@ -388,7 +397,7 @@ def tuned_mesh_grid_scan(AD, mot1, s1, f1, int1, mot2, s2, f2, int2,
         if peak_stats.max is None:
             valid_peak = False
 
-        final_position = 
+        final_position = 0 
         if valid_peak: # Condition for finding a peak
             if peak_choice == 'cen':
                 final_position = peak_stats.cen
@@ -426,3 +435,551 @@ def tuned_mesh_grid_scan(AD, mot1, s1, f1, int1, mot2, s2, f2, int2,
     newGen = bp.grid_scan(detectors, *motor_args, 
                             per_step=per_stepper, md=_md)
     return (yield from newGen)
+
+@inject_md_decorator({'macro_name':'powder_check'})
+def powder_check(dets):
+    """
+    plan to check the coverage of peaks on the detector. this plan takes a scan, applies some metrics to check the q/chi coverage of peaks on the detector, and reports a value.
+    """
+
+@inject_md_decorator({'macro_name':'rock'})
+def rock(det, motor, ranges, *, stage=None, md=None):
+    """
+    based on Robert's rocking_scan code to include a motor staging option
+    it also accepts an arbitrary number of ranges to rock across
+    :param det: detector object
+    :type det: subclass of ophyd.areadetector
+    :param motor: motor to rock during exposure
+    :type motor: EpicsMotor
+    :param ranges: min and max values to rock the motor across
+    :type minn: list of N length lists containing [min,max] pairs
+    :param stage: optional staging positions to execute before each rocking command, defaults to None
+    :type stage: dictionary containing N key-value pairs; each key is an integer 1...N and each value
+                 is a dictionary; the inner dictionaries contain key-value pairs for a motor to stage
+                 and the staging position; ex. stage={1:{motor1,pos1},2:{motor1,pos2}}
+    :param md: metadata dictionary, defaults to None
+    :type md: dict, optional
+    :return: uid
+    :rtype: string
+    :yield: plan messages
+    :rtype: generator
+    """
+    uid = yield from bps.open_run(md)
+
+    # assume dexela detector trigger time PV
+    exposure_time = det.cam.acquire_time.get()
+    start_pos = motor.user_readback.get()
+
+    yield from bps.stage(det)
+    
+    for ind,ranger in enumerate(ranges):
+        # get the motor limits
+        minn = ranger[0]
+        maxx = ranger[1]
+
+        # stage the motors/detectors in the correct position
+        if stage:
+    # open the shutter
+            # stage is a dictionary with n many dictionaries inside
+            # each inner diction has a key-value pair of motor-position
+            # iterate through each motor and set the position
+            for m in stage:
+                print('Motor to stage:' + str(m.name))
+                print('Staging position:' + str(stage[m][ind]))
+                yield from bps.mv(m,stage[m][ind])
+
+        trig_status = (yield from bps.trigger(det,wait=False))
+        print(trig_status)
+        start = time.time()
+        now = time.time()
+
+        #while ((now - start ) < exposure_time) or (not trig_status.done):
+        while not trig_status.done:
+            yield from bps.mv(motor, maxx)
+            yield from bps.mv(motor, minn)
+            now = time.time()
+        
+        print(trig_status) 
+        yield from bps.create('primary')
+        reading = (yield from bps.read(det))
+        yield from bps.save()
+        #print(reading)
+        #print('sleep once')
+        yield from bps.sleep(1)
+    
+    yield from bps.close_run()
+    yield from bps.unstage(det)
+
+    # reset position
+    yield from bps.mv(motor, start_pos)
+
+    return uid
+
+def rock_stub(det, motor, ranges):
+    '''
+    only for use (currently) with filter_opt_count.  
+    Takes a list of detectors, unlike rock
+    '''
+
+    # assume dexela detector trigger time PV
+    for d in det: 
+        if hasattr(d, 'cam'):
+            exposure_time = d.cam.acquire_time.get()
+    start_pos = motor.user_readback.get()
+    
+    for ind,ranger in enumerate(ranges):
+        # get the motor limits
+        minn = ranger[0]
+        maxx = ranger[1]
+
+        for d in det:
+            if hasattr(d, 'cam'): # This is awful find a better way to filter devices
+                trig_status = (yield from bps.trigger(d,wait=False))
+        print(trig_status)
+        start = time.time()
+        now = time.time()
+
+        #while ((now - start ) < exposure_time) or (not trig_status.done):
+        while not trig_status.done:
+            yield from bps.mv(motor, maxx)
+            yield from bps.mv(motor, minn)
+            now = time.time()
+        
+        print(trig_status) 
+        yield from bps.create('primary')
+        
+        ret = {}
+        for d in det:
+            reading = (yield from bps.read(d))
+             # open the shutter
+        if reading is not None:
+                ret.update(reading)
+        yield from bps.save()
+        #print(reading)
+        #print('sleep once')
+        yield from bps.sleep(1)
+    
+    yield from bps.mv(motor,start_pos)
+
+
+@inject_md_decorator({'macro_name':'opt_rock_scan'})
+def opt_rock_scan(det,motors,center,prms,*,sat_count=1e4,md=None):
+    """
+    performs a check for on detector acquisition time based on a rocking scan range,
+    sets the detector acquisition time, and computes the scan
+    :param det: detector to be used
+    :type det: epics ophyd object
+    :param motors: motors to be used NOTE: first motor must be scanning motor, all other motors are for staging
+    :type motor: EpicsMotor signal
+    :param center: center of the sample to be scann [x,y]
+    :type center: list of two floats
+    :param prms: list of instrument and sample parameters prms = [dia,box,res]
+    :param prms: where dia is the sample diameter, box is the box beam size, and res is the scanning resolution
+    :type prms: list of lists
+    """
+
+    # move to the sample center
+    for ind,motor in enumerate(motors):
+        yield from bps.mv(motor,center[ind])
+
+    # pull out parameters
+    dia = prms[0]
+    box = prms[1]
+    res = prms[2]
+    # inscribe everything
+    mmask, mpos = inscribe(motors[0], motors[1], center, dia, box, res)
+    # get the range to rock across
+    r,s = generate_rocking_range(motors[1],mmask,mpos,transpose=True)
+    # pull out the longest scan
+    
+    #cRange = [center[1],center[1]]
+
+    # find the longest rock scan in the ranges
+    # lol logic
+    #for rr in r:
+    #    minn = min(rr)
+    #    maxx = max(rr)
+    #    if minn < cRange[0]:
+    #        cRange[0] = minn
+    #    if maxx > cRange[1]:
+    #        cRange[1] = maxx
+
+    # optimize acquisition time based on a test scan in this range
+    #yield from max_pixel_rock([det],motors[0],cRange,sat_count=1e4)
+
+    #print('Detector Acq Time: ' + str(det.cam.acquire_time.get()))
+
+    # now perform the rocking scan
+    # TODO: need to set up the databroker so that this experiment is recorded
+    yield from rock(det,motors[1],r,stage=s,md=md)
+
+# scan with adaptive optimization
+@inject_md_decorator({'macro_name':'opt_cassette_scan'})
+def opt_cassette_scan(dets,motors,centers,prms,*,md=None):
+    """
+    wrapper for performing multiple opt_rock_scans on a series of samples
+    performs a check for on detector acquisition time based on a rocking scan range,
+    sets the detector acquisition time, and computes the scan
+    :param det: detector to be used
+    :type det: epics ophyd object
+    :param motors: motors to be used rocked
+    :type motor: E'A1','A2','A3','A4','A5','A6','A7','A8',
+            'calib1',
+picsMotor signal
+    :param center: center of the sample to be scann [x,y]
+    :type center: list of two floats
+    :param prms: list of instrument and sample parameters prms = [dia,box,res]
+    :param prms: where dia is the sample diameter, box is the box beam size, and res is the scanning resolution
+    :type prms: list of lists
+    """
+    # performs a series of opt_rock_scans based on sample centers and diameters
+
+    for center in centers:
+        yield from opt_rock_scan(dets,motors,center,prms,md=md)
+
+@inject_md_decorator({'macro_name':'max_pixel_rock'})
+def max_pixel_rock(dets, motor,ranger, sat_count=1e4, md={},img_key='dexela_image'):
+    """max_pixel_count
+
+    Adjust acquisition time based on max pixel count
+    Assume each det in dets has an attribute det.max_count.
+    Assume counts are linear with time.
+    Scale acquisition time to make det.max_count.get()=sat_count
+    """
+
+    for det in dets:
+        n = 0
+
+        det.cam.acquire_time.set(1)
+
+        curr_max_counts = 1e10
+        while curr_max_counts > sat_count:
+            # get a dark image
+            yield from bps.mv(fs,0)
+            did = yield from rock(det,motor,[ranger])
+            dhdr = db[did].table(fill=True)
+            dark = dhdr[img_key][1][0]
+            ndark = dark.astype(int)
+            yield from bps.mv(fs,5)
+
+            # perform a rocking scan
+            uid = yield from rock(det,motor,[ranger])
+            ahdr = db[uid].table(fill=True)
+            # grab the image
+            arr = ahdr['dexela_image'][1][0]
+            narr = arr.astype(int)
+            sarr = arr - dark
+
+            #check, zero negative values
+            vals = np.where(sarr < 0)
+            sarr[vals] = 0
+            
+            # count "saturated" pixels, max 1% of detector saturated
+            vals = np.where(sarr > 0.9*sat_count)
+            sarr[vals] = 0
+            ## if over allowed amount, reduce time
+
+            # 
+
+            plt.figure()
+            plt.imshow(sarr,vmax = 1e4)
+            plt.show()
+            # find the max pixel count on the image
+            curr_max_counts = np.max(sarr)
+            print('Current Max Counts; ' + str(curr_max_counts))
+            # get the current detector acquisition time
+            curr_acq_time = det.cam.acquire_time.get()
+            # calculate a new acquisition time based on the desired max counts
+            new_acq_time = round((curr_acq_time * sat_counts)/curr_max_counts, 4)
+
+            if new_acq_time > 600:
+                print('Acquisition time too long!! Resetting to 1.')
+                new_acq_time = 1
+
+            # set the detector to the new value
+            yield from bps.mv(det.cam.acquire_time, new_acq_time)
+
+            n+=1
+
+            if n == 5:
+                break
+
+        print('Final Acquisition Time: ' + str(new_acq_time))
+
+
+@inject_md_decorator({'macro_name':'survey'})
+def survey(f,stage,det,stop,motors,pinguess,name,*,md=None):
+
+    
+    prms = [5,[0.548,0.156],[20,20]]
+
+    # clear the filters
+    f.none()
+
+    # move to the pin and calibrate the position
+    yield from find_coords(stop,motors[0],motors[1],pinguess)
+
+    f.set(2,1)
+    f.set(1,1)
+
+    # define all the locations you want to scan
+    allpos = ['calib1','calib2',
+            'A1','A2','A3','A4','A5','A6','A7','A8',
+            'calib1','calib2',
+            'B1','B2','B3','B4','B5','B6','B7','B8',
+            'calib1','calib2',
+            'C1','C2','C3','C4','C5','C6','C7','C8',
+            'calib1','calib2',
+            'D1','D2','D3','D4','D5','D6','D7','D8',
+            'calib1','calib2',
+            'E1','E2','E3','E4','E5','E6','E7','E8',
+            'calib1','calib2',
+            'F1','F2','F3','F4','F5','F6','F7','F8',
+            'calib1','calib2']
+     
+
+    for pos in allpos:
+        
+
+        center = stage.loc([pos])[0]
+
+        #move to the sample locations
+        yield from bps.mv(motors[0],center[0],motors[1],center[1])
+
+        #take a dark image
+        yield from bps.mv(fs,0)
+        yield from rock(det,motors[0],[[center[0]-1,center[0]+1]],md = {name + 'scan':str(pos) + '_dark'})
+        yield from bps.mv(fs,5)
+
+
+        # take a single exposure
+        yield from bp.count([det],
+                md = {name + 'scan':str(pos) + '_single_exposure',
+                'I0':I0.get(),'I1':I1.get(),'bstop':stop.get(),'samp_center':center})
+
+
+        # take a single rocking scan
+        yield from rock(det,motors[0],[[center[0]-2.5,center[0]+2.5]],
+                md={name + 'scan':str(pos) + '_single_rock',
+                'I0':I0.get(),'I1':I1.get(),'bstop':stop.get(),'samp_center':center})
+
+
+        # take rocking scans across the whole sample surface area
+        yield from opt_rock_scan(det,motors,center,prms,
+                md={name + 'scan':str(pos) + '_full_rock_res10',
+                'I0':I0.get(),'I1':I1.get(),'bstop':stop.get(),'samp_center':center})
+        print('SAMPLE ' + str(pos) + ' FINISHED!!!!')
+    yield from bps.mv(fs,0)
+    f.all()
+
+@inject_md_decorator({'macro_name':'test_stats'})
+def test_stats(det,motor,ranger):
+    
+    # get the starting acquisition time
+    estart = det.cam.acquire_time.get()
+
+    etimes = [0,0.1,0.2,0.5,0.75,1,1.5,2,3,5,7,10]
+
+    for e in etimes:
+        # set the detector acquisition time
+        det.cam.acquire_time.set(e)
+        count = 0
+        while count < len(etimes):
+            yield from rock(det,motor,ranger,md = {'etime':e})
+            count+=1
+
+    # reset the acquisition time
+    det.cam.acquire_time.set(estart)
+
+def filter_opt_count(det, motor, ranges, target_count=1000, det_key='dexela_image' ,md={}):
+    """ filter_opt_count
+    OPtimize counts using filters 
+
+    Only takes one detector, since we are optimizing based on it alone
+    aims to only reduce saturated pixels
+    automatically collects filters as well
+    """
+    dc = DocumentCache()
+    token = yield from bps.subscribe('all', dc)
+    yield from bps.stage(det)
+
+    yield from bps.open_run(md=md)
+    # set current filter status @ midpoint (7)
+    int_curr = 7
+    filters(int_to_bool_list(7))
+    # BlueskyRun object allows interaction with documents similar to db.v2, 
+    # but documents are in memory
+    run = BlueskyRun(dc)
+    yield from rock_stub([det, filt], motor, ranges)
+    #yield from bps.trigger_and_read([det,filt])
+    data = run.primary.read()[det_key][-1].values
+    sat_count = np.sum(data > 16380)
+
+    int_max = 15 # lowest counts at all filters in
+    int_min = 0 # highest counts at all filters out
+    max_iter = 5
+    curr_iter = 0
+    sat_count_record = [0 for i in range(16)]
+    sat_count_record[int_curr] = sat_count
+
+    # gather filter info and binary search to get to within 200 below target
+    while (  not ((sat_count<target_count) and (sat_count>(target_count-200)))
+             and (curr_iter < max_iter)   ):
+        if sat_count > target_count:
+            print('too high')
+            # restrict search range to (int_min, curr_filt)
+            int_min = int(int_max - (int_max - int_min)/2)
+        elif sat_count < (target_count - 200):
+            print('too low')
+            # restrict search range to (curr_filt, int_max)
+            int_max = int((int_max - int_min)/2 + int_min)
+
+        # new setting is midpoint of new range
+        int_curr = int((int_max - int_min)/2 + int_min)
+        new_filters = int_to_bool_list(int_curr)
+
+        curr_filters = [e>0 for e in filt.get()]
+        # set new filter configuration
+        print(f'search range: ({int_min}, {int_max})')
+        print(f'sat_count: {sat_count}, filters: {curr_filters} -> {new_filters}')
+        if sat_count_record[int_curr] > 0:
+            break
+        filters(new_filters)
+
+        # grab new sat_count
+        run = BlueskyRun(dc)
+        # or yield from rock_stub(...), then yield from bps.trigger_and_read([filt])
+        #yield from bps.trigger_and_read([det, filt])
+        yield from rock_stub([det, filt], motor, ranges)
+        data = run.primary.read()[det_key][-1].values
+        sat_count = np.sum(data > 16380)
+        sat_count_record[int_curr] = sat_count
+        curr_iter += 1
+
+    # Final acquisition
+    # find setting just below target_count 
+    counts = np.array(sat_count_record) - target_count
+    index = np.argmin(np.abs(counts))
+    if sat_count_record[index] > target_count:
+        # move one below
+        index += 1
+    filters(int_to_bool_list(index))
+
+    # scale up acquisition time to get close to target_count
+    old_time = det.cam.acquire_time.get()
+    old_counts = sat_count_record[index]
+    new_time = np.min([old_time * target_count / old_counts * 0.8,2])
+    print(f'old time: {old_time} -> new_time: {new_time}')
+    print(sat_count_record)
+    yield from bps.mv(det.cam.acquire_time, new_time)
+    #yield from bps.trigger_and_read([det,filt])
+    yield from rock_stub([det, filt], motor, ranges)
+
+    yield from bps.close_run()
+    yield from bps.unsubscribe(token)
+    yield from bps.unstage(det)
+
+
+@inject_md_decorator({'macro_name':'opt_survey'})
+def opt_survey(filt,det,bstop,stage,motors,pinguess,mesh,name,*,md=None):
+    # a survey scan for an entire cassette using Robert's adaptive optimization for
+    # filters and exposure time
+
+    # filt -- filter box class
+    # det -- dexela detector
+    # bstop -- beamstop
+    # stage -- the stage class object
+    # motors -- [x motor, y motor]
+    # pinguess -- [guess x, guess y] guess for the pinhole location
+    # prms -- parameters for inscribing rocks
+
+    # this scan rocks in y, which should be motor[1]i
+
+    # CLOSE THE FILTER TO BEGIN
+    # and keep it closed when you don't need it
+    print('EXPERIMENT START')
+    yield from bps.mv(fs,0)
+    time.sleep(2)
+
+    # clear the filters
+    filt.none()
+
+    print('FIND COORDS')
+    time.sleep(2)
+    yield from bps.mv(fs,5)
+    # move to the pin and calibrate the position
+    yield from find_coords(bstop,motors[0],motors[1],pinguess)
+    yield from bps.mv(fs,0)
+
+    # define all the locations you want to scan
+    allpos = ['calib1','calib2',
+            'A1','A2','A3','A4','A5','A6','A7','A8',
+            'calib1','calib2',
+            'B1','B2','B3','B4','B5','B6','B7','B8',
+            'calib1','calib2',
+            'C1','C2','C3','C4','C5','C6','C7','C8',
+            'calib1','calib2',
+            'D1','D2','D3','D4','D5','D6','D7','D8',
+            'calib1','calib2',
+            'E1','E2','E3','E4','E5','E6','E7','E8',
+            'calib1','calib2',
+            'F1','F2','F3','F4','F5','F6','F7','F8',
+            'calib1','calib2']
+
+
+
+    for pos in allpos:
+        print('SAMPLE ' + str(pos))
+        time.sleep(2)
+
+        # get the sample position
+        c = stage.loc([pos])[0]
+
+        # move to the sample position
+        yield from bps.mv(motors[0],c[0],motors[1],c[1])
+
+        # set the exposure time before doing filter_opt_count
+        det.cam.acquire_time.set(2)
+
+        # open the shutter in preparation for filter_opt_count
+        print('FILTER OPT COUNT START')
+        yield from bps.mv(fs,5)
+        time.sleep(2)
+        # first we want to test the filters and exposure time
+        # aim for fewer than 1000 saturated pixels
+        yield from filter_opt_count(det,motors[1],[[c[1]-2,c[1]+2]],target_count=1000)
+
+        # close the filter for computation
+        print('FILTER OPT COUNT FINISH')
+        yield from bps.mv(fs,0)
+        time.sleep(2)
+
+        # now do the full rocking scan
+        # first inscribe the motors
+        # define the params
+
+        m,p = inscribe(motors[0],motors[1], c, 5, box, [mesh,mesh])
+
+        # generate the ranges
+        r,s = generate_rocking_range(motors[1],m,p,transpose=True)
+
+        # now open the shutter for the rock
+        print('ROCK START')
+        yield from bps.mv(fs,5)
+
+        yield from rock(det,motors[1],r,stage=s,md={name:str(pos),'I0':I0.get(),'I1':I1.get(),'bstop':bstop.get(),'samp_center':c,'mesh':mesh,'filter1':filter1.get(),'filter2':filter2.get(),'filter3':filter3.get(),'filter4':filter4.get()})
+        
+        time.sleep(2)
+        print('ROCK FINISH')
+        #close the filters so you don't burn the detector
+        filt.all()
+
+        # generate a run summary
+        # run_summary(db[-1],name + '_' + str(pos))
+        
+        #close the shutter before the next sample
+        yield from bps.mv(fs,0)
+        time.sleep(2)
+
+    # close the shutter    
+    yield from bps.mv(fs,0)

@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 *.egg-info/
 *.egg
+.DS_Store
 
 .logs/
 .metadata/

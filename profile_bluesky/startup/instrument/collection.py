@@ -13,6 +13,7 @@ from .framework import *
 from .devices import *
 from .callbacks import *
 from .plans import *
+from .visualization import *
 
 #from apstools.utils import *
 
