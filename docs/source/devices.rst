@@ -95,5 +95,5 @@ The shutter is defined by a variable ``shutter``. The shutter has two states: cl
 Ion Chambers
 ============
 There are two ion chambers in the path of the beam -- one is upstream of the shutter and one is downstream of the shutter
-and filter box. These sensors are defined by the variables ``I0`` and `I1`` respectively. They can be passed to
+and filter box. These sensors are defined by the variables ``I0`` and ``I1`` respectively. They can be passed to
 Bluesky plans as metadata for purposes of monitoring the beam intensity and normalizing images.
