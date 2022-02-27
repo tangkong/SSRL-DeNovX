@@ -23,7 +23,7 @@ class cassetteStage(MotorBundle):
     try:
         casslocs = pd.read_csv('/home/b_spec/.ipython/profile_DeNovX/startup/instrument/devices/casslocs_corrected.csv',header=0)
         rawlocs = pd.read_csv('/home/b_spec/.ipython/profile_DeNovX/startup/instrument/devices/casslocs.csv',header=0)
-        rxlocs = np.array(rawlocs['x']) # !!! NOTE THE NEGATIVE ONE !!!
+        rxlocs = np.array(rawlocs['x'])  
         rylocs = np.array(rawlocs['y'])
 
         # sample location values to be returned; these can be changed
@@ -39,7 +39,7 @@ class cassetteStage(MotorBundle):
         rylocs = np.array(casslocs['y'])
    
         # sample location values to be returned; these can be changed
-        xlocs = np.array(casslocs['x']) # !!! NOTE THE NEGATIVE 1 !!!
+        xlocs = np.array(casslocs['x']) 
         ylocs = np.array(casslocs['y'])
         ids = np.array(casslocs['ID'])
 

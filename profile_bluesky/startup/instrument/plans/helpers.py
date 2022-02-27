@@ -2,24 +2,34 @@
 Helper plans, functions
 
 """
+import bluesky.plan_stubs as bps
 from ..framework.initialize import db
-from ..devices.misc_devices import filter1, filter2, filter3, filter4
-from ..devices.stages import c_stage
+from ..devices.misc_devices import filter1, filter2, filter3, filter4,shutter
+from ..devices.stages import c_stage, cx, cy
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
 from scipy import signal
 from scipy.interpolate import interp1d
 import pyFAI
-import cv2
+import sys, os
+#import cv2
 
-__all__ = ['peak_id','qchi','show_table', 'show_image', 'show_stats','show_sum_stats', 'show_scan','show_sum_images', 'avg_images','sum_images', 'filters','inscribe','generate_rocking_range',
-           'hthresh','data_reduction','wmx','wmy','dist','box','calibration','get_stats','cossim','imthresh','run_summary','hough_bkg']
+__all__ = ['time_plot','cassplot','cmove','sopen','sclose','peak_id','qchi','show_table', 'show_image', 'show_stats','show_sum_stats', 'show_scan','show_sum_images', 'avg_images','sum_images', 'filters','inscribe','generate_rocking_range',
+           'hthresh','data_reduction','wmx','wmy','dist','box','get_stats','cossim','imthresh','run_summary','hough_bkg']
+
+
+def cmove(sample):
+    # a helper function for easily moving from sample to sample in the DeNovX setup
+    loc = c_stage.loc([str(sample)])[0]
+    yield from bps.mv(cx,loc[0])
+    yield from bps.mv(cy,loc[1])
+
 
 def show_table(ind=-1):
     return db[ind].table()
 
-def show_image(ind=-1, data_pt=1, img_key='dexela_image', max_val=16000):
+def show_image(ind=-1, data_pt=1, img_key='dexela_image', max_val=16350,vmax=None):
     """show_image attempts to plot area detector data, plot a vertical slice, 
     and calculates number of pixels above the provided threshold.  
 
@@ -50,8 +60,12 @@ def show_image(ind=-1, data_pt=1, img_key='dexela_image', max_val=16000):
     fig, axes = plt.subplots(1,2, sharey=True, figsize=(7, 4.9),
                             gridspec_kw={'width_ratios': [3,1]})
     
-    vmax = np.mean(arr)+3*np.std(arr)
-    n_max = np.sum(arr>max_val)
+    if vmax:
+        vmax = vmax
+        n_max = np.sum(arr>max_val)
+    else:
+        vmax = np.mean(arr)+3*np.std(arr)
+        n_max = np.sum(arr>max_val)
     
     axes[0].imshow(arr, vmax=vmax)
     axes[0].text(100,100, f'{n_max} pixels > {max_val}', 
@@ -428,61 +442,41 @@ ist created by inscribe()
 
     return ranger,stage
 
-def data_reduction(imArray, calib,
-                   QRange=None, ChiRange=None):
+def data_reduction(imArray, poni='450mm_Lab6.poni',
+                   QRange=None, ChiRange=None,thbin = 2000, chibin = 1000):
     """
-    @author: fangren
-    The input is the raw file's name and calibration parameters
-    return Q-chi (2D array) and a spectrum (1D array)
-    :param imArray: image array
-    :type imArray: 2d image array
-    :param d: detector distance
-    :param Rot: detector rotation
-    :param tilt: detector tilt
-    :param lamda: wavelength (angstroms)
-    :param x0: x pixel center
-    :param y0: y pixel center
-    :param PP: polarization factor
-    :param pixelsize: detector pixelsize
-    :type all above: float
+    Author: Nate J, based on code by Robert Tang Kong and Fang Ren
+    Integrates a 2D diffraction image into a q-chi plot and a 1d histogram
+    then results the results.
+    :param imArray: numpy array of the diffraction image
+    :type imArray: array
+    :param poni: path to a .poni file for calibration/integration
+    :type poni: filepath
+    :param QRange: range of q values to integrate over
+    :type QRange: tuple or list
+    :param ChiRange: range of chi values to integrate over
+    :type ChiRange: tuple or list
+    :param thbin: number of bins to integrate in two-theta
+    :type thbin: int
+    :param chibin: number of bins to integrate in chi
+    :type chibin: int
     """
 
     # get the calibration parameters
-    # defaults to the calibration defined in helpers.py
-    ### calibration list:
-    ### 0--pixelsize
-    ### 1--center x
-    ### 2--center y
-    ### 3--lambda
-    ### 4--distance
-    ### 5--tilt
-    ### 6-- rot
-    d = calib[4]
-    Rot = calib[6]
-    tilt = calib[5]
-    lamda = calib[3]
-    x0 = calib[1]
-    y0 = calib[2]
-    PP = 0 # not refined in calibration
-    pixelsize = calib[0]
-
-
     s1 = int(imArray.shape[0])
     s2 = int(imArray.shape[1])
     imArray = signal.medfilt(imArray, kernel_size=5)
 
-    #detector_mask = np.ones((s1, s2)) * (imArray <= 0)
-    p = pyFAI.AzimuthalIntegrator(wavelength=lamda)
+    poniPath = '/home/b_spec/.ipython/profile_DeNovX/startup/instrument/plans/' + str(poni)
 
-    # refer to http://pythonhosted.org/pyFAI/api/pyFAI.html for pyFAI parameters
-    p.setFit2D(d, x0, y0, tilt, Rot, pixelsize, pixelsize)
+    #detector_mask = np.ones((s1, s2)) * (imArray <= 0)
+    p = pyFAI.load(poniPath)
 
     # the output unit for Q is angstrom-1.  Always integrate all in 2D
-    cake, Q, chi = p.integrate2d(imArray, 1000, 1000)
+    cake, Q, chi = p.integrate2d(imArray, thbin, chibin)
+    Q = Q/10
 
     # pyFAI output unit for Fit2D gemoetry incorrect. Multiply by 10e8 for correction
-    Q = Q * 10e8
-
     # create azimuthal range from chi values found in 2D integrate
     # modify ranges to fit with detector geometry
     centerChi = (np.max(chi) + np.min(chi)) / 2
@@ -493,12 +487,8 @@ def data_reduction(imArray, calib,
     else:
         azRange, radRange = None, None
 
-    Qlist, IntAve = p.integrate1d(imArray, 1000)
-                                  #azimuth_range=azRange, radial_range=radRange,
-                                  #mask=detector_mask, polarization_factor=PP)
-
-    # the output unit for Q is angstrom-1
-    Qlist = Qlist * 10e9
+    Qlist, IntAve = p.integrate1d(imArray, thbin)
+    Qlist = Qlist/10
 
     # shift chi from 2D integrate
     chi = chi - centerChi
@@ -801,7 +791,147 @@ def run_summary(runs,name, outputPath='/bluedata/b_mehta/export_DeNovX/summary/'
             plt.close()
             pdf.savefig(page)
 
+def cassplot(cass,samp,scan=None,poni=None,vmax=None):
+    """
+    A function for robust plotting of data collected from DeNovX cassettes.
+    :param cass: cassette metadata tag to look for
+    :type cass: string
+    :param samp: sample ID to plot
+    :type samp: string:
+    :param scan: if multiple scans were taken on the same sample, you can choose a specific one to plot
+    :type scan: int
+    :param poni: poni file to use; if None, will plot whatever is installed in profile_DeNovX
+    :type poni: filepath
+    """
 
+    # first we have to grab all the data associated with the cassette metadata tag
+    # this is going to be tricky because we can't pass the cassette name as anything but a string
+    # whereas databroker needs it to be...not a string? Not a variable? I'm not sure what it is
+    # so instead we will search for __all__ runs that have 'samp' in them, then match it with a key
+    # the key will be cass
+    allres = list(db(str(samp)))
+
+    # for storing the runs that match both cass and A1 (in case multiple were taken)
+    runs = []
+
+    # now go through these results and find the one with a key that matches cass
+    for ar in allres:
+        if cass in list(ar.start.keys()):
+            # store the unique identifier
+            runs.append(ar.start['uid'])
+            print(runs)
+
+    if len(runs) == 0:
+        print('No cassettes found with that Cassette # or Sample ID')
+        return
+
+    elif len(runs) > 1:
+        # for now just choose the most recent -- update with more robust functionality
+        run = runs[-1]
+
+    else:
+        run = runs[0]
+
+    # I really really dislike the syntax for databroker
+    # so many different layers to go through to get your data
+    # users are gonna hate this
+    full = list(db(run))
+    where = -1
+    leng = 0
+
+    # many of the samples are going to have multiple measurements stored under 
+    # find the one with the most images in it
+    for ind,f in enumerate(full):
+        if len(f.table()['dexela_image']) > leng:
+            where = ind
+            leng = len(f.table()['dexela_image']) 
+
+    # okay now we have the index of where the sample is stored
+    # lets grab the data and start plotting things
+    imgs = []
+    for img in full[where].table(fill=True)['dexela_image']:
+        imgs.append(img)
+
+    # if scan is provided then only plot a single one of the images
+    # else take the sum of them all
+    if scan:
+        lenscan = len(imgs)
+        if scan > lenscan:
+            print(f'There are only {lenscan} scans for this sample. Please choose a different scan number.')
+            return
+        else:
+            imArray = np.sum(imgs[scan],axis=0)[0]
+    else:
+        # sum the images, be sure to use the right datatype
+        imArray = np.sum(imgs,axis=0,dtype='int32')[0]
+
+    # now we can do the data reduction
+    if poni:
+        qchi = data_reduction(imArray,poni=poni)
+    else:
+        qchi = data_reduction(imArray)
+
+    # get some of the plotting parameters
+    if vmax:
+        vmax = vmax
+    else:
+        vmax = np.mean(imArray.flatten()) + 3*np.std(imArray.flatten())
+
+    # make the plot
+    fig,ax = plt.subplots(1,3,figsize=(15,5))
+
+    # first the raw image
+    ax[0].imshow(imArray,vmax=vmax)
+    ax[0].set_xlabel('pixels')
+    ax[0].set_ylabel('pixels')
+
+    # now the qchi image
+    ax[1].pcolormesh(qchi[1],qchi[2],qchi[0],vmax=vmax)
+    ax[1].set_xlabel('q (' + r'$\AA^{-1}$)')
+    ax[1].set_ylabel(r'$\chi$ (degrees)')
+    ax[1].set_title(f'{cass} {samp}')
+
+    # now the 1d histogram
+    ax[2].plot(qchi[3],qchi[4],'k-')
+    ax[2].set_xlabel('q (' + r'$\AA^{-1}$)')
+    ax[2].set_ylabel('Intensity')
+
+    plt.show()
+    return
+    
+def time_plot(cass):
+    # take an array with t entries of time
+    # subtract every t_i-1 from t_i
+    # and turn into meaningful units (currently in seconds?)
+    res = list(db(cass))
+ 
+    tarr = []
+ 
+    for r in res:
+        tarr.append(r.start['time'])
+ 
+    tarr = sorted(tarr)
+    tdiff = []
+    tcum = []
+
+    for ind,t in enumerate(tarr):
+        if ind == 0:
+            tdiff.append(0)
+            tcum.append(0)
+            continue
+        else:
+            tdelt = (t - tarr[ind-1])/60
+            tdiff.append(tdelt)
+            tcum.append((tcum[ind-1] + tdelt))
+    #need to add a comment apparently
+    plt.figure()
+    plt.plot(tcum,tdiff,label='Difference (minutes)')
+    plt.xlabel('Time from Start')
+    plt.ylabel('Time between scans.')
+    plt.legend()
+    plt.title(cass)
+    plt.show()
+    return tarr,tdiff,tcum
 
 
 
@@ -815,13 +945,10 @@ def wmy():
 def dist():
     return c_stage.detz.user_readback.get()
 
-box = [0.548,0.156]
-### detector calibration parameters
-### calibration = [pixelsize,center x, center y, lambda, distance, tilt, rot]
-#calibration = [0.0748,120.022/0.0748,144.963/0.0748,0.72553,434.513,-1.076,317.08]
+def sopen():
+    yield from bps.mv(shutter,5)
 
-# calibration = [center x, center y, wavelength, distance,tilt, rotation]
-# not totally sure what calibration this is for
-# calibration = [119.43,44.674,0.7293,454.41,0.514,280.99]
+def sclose():
+    yield from bps.mv(shutter,0)
 
-calibration = [0.0748,120.08/0.0748,152.856/0.0748,0.7293,633.725,-0.648,312.76]
+box = [.162,.575]

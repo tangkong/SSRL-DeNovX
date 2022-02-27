@@ -163,8 +163,11 @@ def stub_filter_opt_count(det, motor, ranges, target_count=1000, det_key='dexela
     yield from rock_stub([det, filt], motor, ranges)
     #yield from bps.trigger_and_read([det,filt])
     data = run.primary.read()[det_key][-1].values
+    data = np.array(data)
+    data[0:1944,1536:3072] = 0
     sat_count = np.sum(data > 16380)
-    
+    print(f'SATURATION COUNT: {sat_count}')
+
     int_max = 15 # lowest counts at all filters in
     int_min = 0 # highest counts at all filters out
     max_iter = 5
@@ -218,6 +221,7 @@ def stub_filter_opt_count(det, motor, ranges, target_count=1000, det_key='dexela
     # scale up acquisition time to get close to target_count
     old_time = det.cam.acquire_time.get()
     old_counts = sat_count_record[index]
+    print(old_counts)
     new_time = np.min([old_time * target_count / old_counts * 0.8,2])
     print(f'old time: {old_time} -> new_time: {new_time}')
     print(sat_count_record)

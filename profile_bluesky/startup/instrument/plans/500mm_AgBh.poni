@@ -1,0 +1,12 @@
+# Nota: C-Order, 1 refers to the Y axis, 2 to the X axis 
+# Calibration done at Fri Feb 18 19:20:09 2022
+poni_version: 2
+Detector: Dexela2923
+Detector_config: {"pixel1": 7.5e-05, "pixel2": 7.5e-05}
+Distance: 0.4995618509714009
+Poni1: 0.16148702295512743
+Poni2: 0.09224936471763862
+Rot1: -0.04273145961603056
+Rot2: -0.03823572050905368
+Rot3: -4.358475274900046e-09
+Wavelength: 6.199209921660013e-11
