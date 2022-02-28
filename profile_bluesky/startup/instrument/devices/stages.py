@@ -23,16 +23,9 @@ class cassetteStage(MotorBundle):
     # TODO: can't find the .csv file in this directory, need to fix 
     # import the absolute sample positions
     try:
-<<<<<<< HEAD
         casslocs = pd.read_csv('/home/b_spec/.ipython/profile_DeNovX/startup/instrument/devices/casslocs_corrected.csv',header=0)
         rawlocs = pd.read_csv('/home/b_spec/.ipython/profile_DeNovX/startup/instrument/devices/casslocs.csv',header=0)
-        rxlocs = np.array(rawlocs['x'])  
-=======
-        
-        casslocs = pd.read_csv( Path(__file__).parent / 'casslocs_corrected.csv', header=0)
-        rawlocs = pd.read_csv( Path(__file__).parent / 'casslocs.csv', header=0)
-        rxlocs = np.array(rawlocs['x']) # !!! NOTE THE NEGATIVE ONE !!!
->>>>>>> master
+        rxlocs = np.array(rawlocs['x'])
         rylocs = np.array(rawlocs['y'])
 
         # sample location values to be returned; these can be changed

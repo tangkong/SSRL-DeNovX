@@ -2,7 +2,7 @@
 Helper plans, functions for use in plan orchestration
 
 """
-<<<<<<< HEAD
+
 import bluesky.plan_stubs as bps
 from ..framework.initialize import db
 from ..devices.misc_devices import filter1, filter2, filter3, filter4,shutter
@@ -266,17 +266,8 @@ def show_sum_images(ind=-1,img_key='dexela_image',max_val=16000):
     axes[0].imshow(sarr, vmax=vmax)
 
     plt.tight_layout()
-=======
 
-from ..devices.misc_devices import filter1, filter2, filter3, filter4
-from ..devices.stages import c_stage
-
-__all__ = ['filters', 'inscribe', 'generate_rocking_range', 'wmx', 'wmy',
-           'dist','box','calibration']
->>>>>>> master
-
-
-
+    
 # function for setting filter box
 def filters(new_vals=None):
     """
@@ -451,7 +442,7 @@ ist created by inscribe()
 
     return ranger,stage
 
-<<<<<<< HEAD
+
 def data_reduction(imArray, poni='450mm_Lab6.poni',
                    QRange=None, ChiRange=None,thbin = 2000, chibin = 1000):
     """
@@ -944,10 +935,6 @@ def time_plot(cass):
     return tarr,tdiff,tcum
 
 
-
-=======
->>>>>>> master
-#spec wmx
 def wmx():
     return c_stage.cx.user_readback.get()
 
