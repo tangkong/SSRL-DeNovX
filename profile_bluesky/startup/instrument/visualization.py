@@ -1,36 +1,27 @@
+""" 
+functions for visualization, post-processing
 """
-Helper plans, functions for use in plan orchestration
 
-"""
-<<<<<<< HEAD
-import bluesky.plan_stubs as bps
-from ..framework.initialize import db
-from ..devices.misc_devices import filter1, filter2, filter3, filter4,shutter
-from ..devices.stages import c_stage, cx, cy
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
+from .framework.initialize import db
+
 import numpy as np
 from scipy import signal
 from scipy.interpolate import interp1d
+
 import pyFAI
-import sys, os
-#import cv2
+import cv2
 
-__all__ = ['time_plot','cassplot','cmove','sopen','sclose','peak_id','qchi','show_table', 'show_image', 'show_stats','show_sum_stats', 'show_scan','show_sum_images', 'avg_images','sum_images', 'filters','inscribe','generate_rocking_range',
-           'hthresh','data_reduction','wmx','wmy','dist','box','get_stats','cossim','imthresh','run_summary','hough_bkg']
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 
 
-def cmove(sample):
-    # a helper function for easily moving from sample to sample in the DeNovX setup
-    loc = c_stage.loc([str(sample)])[0]
-    yield from bps.mv(cx,loc[0])
-    yield from bps.mv(cy,loc[1])
-
+__all__ = ['show_table', 'show_image', 'show_stats', 'show_sum_stats', 
+            'show_scan', 'avg_images', 'sum_images', 'show_sum_images']
 
 def show_table(ind=-1):
     return db[ind].table()
 
-def show_image(ind=-1, data_pt=1, img_key='dexela_image', max_val=16350,vmax=None):
+def show_image(ind=-1, data_pt=1, img_key='dexela_image', max_val=16000):
     """show_image attempts to plot area detector data, plot a vertical slice, 
     and calculates number of pixels above the provided threshold.  
 
@@ -61,12 +52,8 @@ def show_image(ind=-1, data_pt=1, img_key='dexela_image', max_val=16350,vmax=Non
     fig, axes = plt.subplots(1,2, sharey=True, figsize=(7, 4.9),
                             gridspec_kw={'width_ratios': [3,1]})
     
-    if vmax:
-        vmax = vmax
-        n_max = np.sum(arr>max_val)
-    else:
-        vmax = np.mean(arr)+3*np.std(arr)
-        n_max = np.sum(arr>max_val)
+    vmax = np.mean(arr)+3*np.std(arr)
+    n_max = np.sum(arr>max_val)
     
     axes[0].imshow(arr, vmax=vmax)
     axes[0].text(100,100, f'{n_max} pixels > {max_val}', 
@@ -140,7 +127,6 @@ def show_sum_stats(ind=-1,data_pt=1,img_key='dexela_image',max_val=16000):
     axes[2].set_xlabel('intesnity bin')
     plt.tight_layout()
 
-
 def show_scan(ind=-1, dep_subkey='channel1_rois_', indep_subkey='s_stage'):
     """show_scan attempts to plot tabular data.  Looks for dependent and 
     independent variables based on provided subkeys
@@ -171,7 +157,6 @@ def show_scan(ind=-1, dep_subkey='channel1_rois_', indep_subkey='s_stage'):
     except KeyError:
         print(e)
         return
-
 
 def avg_images(ind=-1,img_key='Dexela'):
     """avg_images [summary]
@@ -218,12 +203,8 @@ def avg_images(ind=-1,img_key='Dexela'):
 
     return avg_arr
 
-
 def sum_images(ind=-1, img_key='dexela_image'):
     """sum_images [summary]
-
-    [extended_sum5       2021-10-30 02:05:02.915573359  466b5958-8ad2-45a9-b3e8-23a4b72d3b5f/4                     0             0             0             4             0
-mary]
 
     :param ind: Run index, defaults to -1.
                 If negative integer, counts backward from most recent run (-1=most recent, -2=second most recent)
@@ -266,244 +247,6 @@ def show_sum_images(ind=-1,img_key='dexela_image',max_val=16000):
     axes[0].imshow(sarr, vmax=vmax)
 
     plt.tight_layout()
-=======
-
-from ..devices.misc_devices import filter1, filter2, filter3, filter4
-from ..devices.stages import c_stage
-
-__all__ = ['filters', 'inscribe', 'generate_rocking_range', 'wmx', 'wmy',
-           'dist','box','calibration']
->>>>>>> master
-
-
-
-# function for setting filter box
-def filters(new_vals=None):
-    """
-    :param new_vals: new vals
-    :type new_vals: list?
-    """
-    if new_vals:
-        filter1.put(new_vals[0]*4.9)
-        filter2.put(new_vals[1]*4.9)
-        filter3.put(new_vals[2]*4.9)
-        filter4.put(new_vals[3]*4.9)
-    print(f'filter1: {filter1.get():.1f}')
-    print(f'filter2: {filter2.get():.1f}')
-    print(f'filter3: {filter3.get():.1f}')
-    print(f'filter4: {filter4.get():.1f}')
-
-# calculating the boundaries on a sample and inscribing motor movement
-# inside of that 2D area
-# currently this only works for a circular sample and a box beam
-def inscribe(motor1,motor2,C,dia,box,res):
-   
-    """
-    TODO: write up an explanation of your math/logic
-    :param center: list of sample center coordinates
-    :type center: list
-    :param dia: sample diameter
-    :type dia: float
-    :param box: width and height of box beam
-    :type box: list
-    :param res: number of points to generate along each direction
-    :type res: list of size for each dimension
-    :return mmask: mask of valid motor positions
-    :rtype mmask: 2d array
-    :return mpos: motor positions corresponding to mmask
-    :rtype mpos: dict
-    """
-
-    # convert the C list to an array because
-    C = np.array(C)
-
-    # calculate how many boxes it takes to cover the area of the circle
-    # if the box is w wide and h tall then to cover a circle of
-    # diameter d you will need n*w boxes wide and m*h boxes tall (english?)
-    # calculate n=d/w and m=d/h
-    # keep integer values at the end
-    w = box[0]
-    h = box[1]
-    n = np.int(np.ceil(dia/w))
-    m = np.int(np.ceil(dia/h))
-    # we want to center the box on the circle center so keep it even
-    if n % 2 != 0:
-        n += 1
-    if m % 2 != 0:
-        m += 1
-
-    # this is not going to be pretty
-    # generate an array for the inscribing box
-    # calculate start and end points
-    xRange = [C[0]-(w*n)/2,C[0]+(w*n)/2]
-    yRange = [C[1]-(h*m)/2,C[1]+(h*m)/2]
-
-    # create points along the ranges
-    xarr = np.linspace(xRange[0],xRange[1],num=res[0],endpoint=True)
-    yarr = np.linspace(yRange[0],yRange[1],num=res[1],endpoint=True)
-
-    # array to store all of the (in)valid motor positions
-    mask = np.zeros([res[0],res[1]])
-    xpos = np.zeros([res[0],res[1]])
-    ypos = np.zeros([res[0], res[1]])
-
-    # now step through the points on the grid and check if the corners of the box fall outside the circle radius
-    for ind1,ii in enumerate(xarr):
-        for ind2,jj in enumerate(yarr):
-            # place the motor positions at that location
-            xpos[ind2,ind1] = ii
-            ypos[ind2,ind1] = jj
-
-            # find the corner of the box
-            bnds = [C - [ii-w/2,jj-h/2], # bottom left corner
-                    C - [ii-w/2,jj+h/2], # bottom right corner
-                    C - [ii+w/2,jj-h/2], #top left corner
-                    C - [ii+w/2,jj+h/2] #top right corner
-                    ]
-
-            test = [0,0,0,0] # so stupid, find a better way plz
-            for ind,bnd in enumerate(bnds):
-                # check if the corners of the box are outside the radius
-                if np.linalg.norm(bnd) > dia/2:
-                    test[ind] = 1
-
-            if 1 in test:
-                mask[ind1,ind2] = 0
-            else:
-                mask[ind1,ind2] = 1
-
-
-    # create a dictionary with the motors and positions
-    motorpos = {motor1:xpos,motor2:ypos}
-
-    return mask, motorpos
-
-# take an inscribed area and generate rocking scan positions
-def generate_rocking_range(rmotor, mask,mpos,transpose = False):
-    """
-    this function takes an array of motor positions and calculates ranges for a rocking scan
-    it can also optionally generate a dictionary for staging the motors before each scan
-    :param mask: valid motor positions for the sample
-    :type mask: l    try:
-        hdr = db[ind].table(fill=True)
-        arr = hdr[img_key][data_pt][0]
-        #if horizontal:
-        #    arr = np.rot90(arr, -1)
-    except KeyError:
-        print(f'{img_key} not found in run: {ind}, data point: {data_pt}')
-        return
-
-    fig, axes = plt.subplots(1,2, sharey=True, figsize=(7, 4.9),
-                            gridspec_kw={'width_ratios': [3,1]})
-
-    vmax = np.mean(arr)+3*np.std(arr)
-    n_max = np.sum(arr>max_val)
-
-    axes[0].imshow(arr, vmax=vmax)
-    axes[0].text(100,100, f'{n_max} pixels > {max_val}',
-                    backgroundcolor='w')
-
-    scan_no = db[ind].start['scan_id']
-    axes[0].set_title(f'{img_key}, Scan #{scan_no}, data point: {data_pt}')
-
-    height, width = arr.shape
-
-    sl = arr[:, int(0.45*width):int(0.55*width)]
-    axes[1].plot(sl.sum(axis=1), list(range(height)))
-    plt.tight_layout()
-ist created by inscribe()
-    :return ranges,stage: list of [min.max] values to rock across, dictionary of staging positions
-    """
-
-    ranger = []
-    stage  = {}
-    for motor in mpos:
-        stage[motor] = []
-
-    # take transpose if asked
-    if transpose:
-        mask = np.transpose(mask)
-        for motor in mpos:
-            mpos[motor] = np.transpose(mpos[motor])
-
-    # go through rows (columns) of the mask
-    for ind,row in enumerate(mask):
-
-        # find valid indices that equal 1
-        valid = np.where(row == 1)[0]
-        # if no valid points, move to the next row
-        if len(valid) == 0:
-            continue
-
-        # create a list to store all the valid motor positions
-        # use the indices from the mask to get the motor position values from mpos
-        # find the range to rock across
-        minn = min(mpos[rmotor][ind][valid])
-        maxx = max(mpos[rmotor][ind][valid])
-
-        # update the range list
-        ranger.append([minn,maxx])
-        
-        for motor in mpos:
-            #get index for staring motor value
-            lind = np.where(mpos[rmotor][ind] == minn)[0]
-            stage[motor].append(mpos[motor][ind][lind])
-
-    return ranger,stage
-
-<<<<<<< HEAD
-def data_reduction(imArray, poni='450mm_Lab6.poni',
-                   QRange=None, ChiRange=None,thbin = 2000, chibin = 1000):
-    """
-    Author: Nate J, based on code by Robert Tang Kong and Fang Ren
-    Integrates a 2D diffraction image into a q-chi plot and a 1d histogram
-    then results the results.
-    :param imArray: numpy array of the diffraction image
-    :type imArray: array
-    :param poni: path to a .poni file for calibration/integration
-    :type poni: filepath
-    :param QRange: range of q values to integrate over
-    :type QRange: tuple or list
-    :param ChiRange: range of chi values to integrate over
-    :type ChiRange: tuple or list
-    :param thbin: number of bins to integrate in two-theta
-    :type thbin: int
-    :param chibin: number of bins to integrate in chi
-    :type chibin: int
-    """
-
-    # get the calibration parameters
-    s1 = int(imArray.shape[0])
-    s2 = int(imArray.shape[1])
-    imArray = signal.medfilt(imArray, kernel_size=5)
-
-    poniPath = '/home/b_spec/.ipython/profile_DeNovX/startup/instrument/plans/' + str(poni)
-
-    #detector_mask = np.ones((s1, s2)) * (imArray <= 0)
-    p = pyFAI.load(poniPath)
-
-    # the output unit for Q is angstrom-1.  Always integrate all in 2D
-    cake, Q, chi = p.integrate2d(imArray, thbin, chibin)
-    Q = Q/10
-
-    # pyFAI output unit for Fit2D gemoetry incorrect. Multiply by 10e8 for correction
-    # create azimuthal range from chi values found in 2D integrate
-    # modify ranges to fit with detector geometry
-    centerChi = (np.max(chi) + np.min(chi)) / 2
-    if (QRange is not None) and (ChiRange is not None):
-        azRange = (centerChi + ChiRange[0], centerChi + ChiRange[1])
-        radRange = tuple([y / 10E8 for y in QRange])
-        print(azRange, radRange)
-    else:
-        azRange, radRange = None, None
-
-    Qlist, IntAve = p.integrate1d(imArray, thbin)
-    Qlist = Qlist/10
-
-    # shift chi from 2D integrate
-    chi = chi - centerChi
-
-    return cake, Q, chi, Qlist, IntAve
 
 # function that takes an image array and returns an image array with dead pixelsmasked out
 # right now it's hardcoded because I only have 1 dead pixel that I know of
@@ -564,6 +307,84 @@ def cossim(A,B):
     normA = round(np.sqrt(np.sum(np.multiply(A,A))),5)
     normB = round(np.sqrt(np.sum(np.multiply(B,B))),5)
     return round(numer/(normA*normB),5)
+
+def data_reduction(imArray, calib,
+                   QRange=None, ChiRange=None):
+    """
+    @author: fangren
+    The input is the raw file's name and calibration parameters
+    return Q-chi (2D array) and a spectrum (1D array)
+    :param imArray: image array
+    :type imArray: 2d image array
+    :param d: detector distance
+    :param Rot: detector rotation
+    :param tilt: detector tilt
+    :param lamda: wavelength (angstroms)
+    :param x0: x pixel center
+    :param y0: y pixel center
+    :param PP: polarization factor
+    :param pixelsize: detector pixelsize
+    :type all above: float
+    """
+
+    # get the calibration parameters
+    # defaults to the calibration defined in helpers.py
+    ### calibration list:
+    ### 0--pixelsize
+    ### 1--center x
+    ### 2--center y
+    ### 3--lambda
+    ### 4--distance
+    ### 5--tilt
+    ### 6-- rot
+    d = calib[4]
+    Rot = calib[6]
+    tilt = calib[5]
+    lamda = calib[3]
+    x0 = calib[1]
+    y0 = calib[2]
+    PP = 0 # not refined in calibration
+    pixelsize = calib[0]
+
+
+    s1 = int(imArray.shape[0])
+    s2 = int(imArray.shape[1])
+    imArray = signal.medfilt(imArray, kernel_size=5)
+
+    #detector_mask = np.ones((s1, s2)) * (imArray <= 0)
+    p = pyFAI.AzimuthalIntegrator(wavelength=lamda)
+
+    # refer to http://pythonhosted.org/pyFAI/api/pyFAI.html for pyFAI parameters
+    p.setFit2D(d, x0, y0, tilt, Rot, pixelsize, pixelsize)
+
+    # the output unit for Q is angstrom-1.  Always integrate all in 2D
+    cake, Q, chi = p.integrate2d(imArray, 1000, 1000)
+
+    # pyFAI output unit for Fit2D gemoetry incorrect. Multiply by 10e8 for correction
+    Q = Q * 10e8
+
+    # create azimuthal range from chi values found in 2D integrate
+    # modify ranges to fit with detector geometry
+    centerChi = (np.max(chi) + np.min(chi)) / 2
+    if (QRange is not None) and (ChiRange is not None):
+        azRange = (centerChi + ChiRange[0], centerChi + ChiRange[1])
+        radRange = tuple([y / 10E8 for y in QRange])
+        print(azRange, radRange)
+    else:
+        azRange, radRange = None, None
+
+    Qlist, IntAve = p.integrate1d(imArray, 1000)
+                                  #azimuth_range=azRange, radial_range=radRange,
+                                  #mask=detector_mask, polarization_factor=PP)
+
+    # the output unit for Q is angstrom-1
+    Qlist = Qlist * 10e9
+
+    # shift chi from 2D integrate
+    chi = chi - centerChi
+
+    return cake, Q, chi, Qlist, IntAve
+
 
 def imthresh(img,thresh):
     # takes an image, performs a binary threshold around thresh, returns the binary array
@@ -800,170 +621,3 @@ def run_summary(runs,name, outputPath='/bluedata/b_mehta/export_DeNovX/summary/'
             #plt.tight_layout()
             plt.close()
             pdf.savefig(page)
-
-def cassplot(cass,samp,scan=None,poni=None,vmax=None):
-    """
-    A function for robust plotting of data collected from DeNovX cassettes.
-    :param cass: cassette metadata tag to look for
-    :type cass: string
-    :param samp: sample ID to plot
-    :type samp: string:
-    :param scan: if multiple scans were taken on the same sample, you can choose a specific one to plot
-    :type scan: int
-    :param poni: poni file to use; if None, will plot whatever is installed in profile_DeNovX
-    :type poni: filepath
-    """
-
-    # first we have to grab all the data associated with the cassette metadata tag
-    # this is going to be tricky because we can't pass the cassette name as anything but a string
-    # whereas databroker needs it to be...not a string? Not a variable? I'm not sure what it is
-    # so instead we will search for __all__ runs that have 'samp' in them, then match it with a key
-    # the key will be cass
-    allres = list(db(str(samp)))
-
-    # for storing the runs that match both cass and A1 (in case multiple were taken)
-    runs = []
-
-    # now go through these results and find the one with a key that matches cass
-    for ar in allres:
-        if cass in list(ar.start.keys()):
-            # store the unique identifier
-            runs.append(ar.start['uid'])
-            print(runs)
-
-    if len(runs) == 0:
-        print('No cassettes found with that Cassette # or Sample ID')
-        return
-
-    elif len(runs) > 1:
-        # for now just choose the most recent -- update with more robust functionality
-        run = runs[-1]
-
-    else:
-        run = runs[0]
-
-    # I really really dislike the syntax for databroker
-    # so many different layers to go through to get your data
-    # users are gonna hate this
-    full = list(db(run))
-    where = -1
-    leng = 0
-
-    # many of the samples are going to have multiple measurements stored under 
-    # find the one with the most images in it
-    for ind,f in enumerate(full):
-        if len(f.table()['dexela_image']) > leng:
-            where = ind
-            leng = len(f.table()['dexela_image']) 
-
-    # okay now we have the index of where the sample is stored
-    # lets grab the data and start plotting things
-    imgs = []
-    for img in full[where].table(fill=True)['dexela_image']:
-        imgs.append(img)
-
-    # if scan is provided then only plot a single one of the images
-    # else take the sum of them all
-    if scan:
-        lenscan = len(imgs)
-        if scan > lenscan:
-            print(f'There are only {lenscan} scans for this sample. Please choose a different scan number.')
-            return
-        else:
-            imArray = np.sum(imgs[scan],axis=0)[0]
-    else:
-        # sum the images, be sure to use the right datatype
-        imArray = np.sum(imgs,axis=0,dtype='int32')[0]
-
-    # now we can do the data reduction
-    if poni:
-        qchi = data_reduction(imArray,poni=poni)
-    else:
-        qchi = data_reduction(imArray)
-
-    # get some of the plotting parameters
-    if vmax:
-        vmax = vmax
-    else:
-        vmax = np.mean(imArray.flatten()) + 3*np.std(imArray.flatten())
-
-    # make the plot
-    fig,ax = plt.subplots(1,3,figsize=(15,5))
-
-    # first the raw image
-    ax[0].imshow(imArray,vmax=vmax)
-    ax[0].set_xlabel('pixels')
-    ax[0].set_ylabel('pixels')
-
-    # now the qchi image
-    ax[1].pcolormesh(qchi[1],qchi[2],qchi[0],vmax=vmax)
-    ax[1].set_xlabel('q (' + r'$\AA^{-1}$)')
-    ax[1].set_ylabel(r'$\chi$ (degrees)')
-    ax[1].set_title(f'{cass} {samp}')
-
-    # now the 1d histogram
-    ax[2].plot(qchi[3],qchi[4],'k-')
-    ax[2].set_xlabel('q (' + r'$\AA^{-1}$)')
-    ax[2].set_ylabel('Intensity')
-
-    plt.show()
-    return
-    
-def time_plot(cass):
-    # take an array with t entries of time
-    # subtract every t_i-1 from t_i
-    # and turn into meaningful units (currently in seconds?)
-    res = list(db(cass))
- 
-    tarr = []
- 
-    for r in res:
-        tarr.append(r.start['time'])
- 
-    tarr = sorted(tarr)
-    tdiff = []
-    tcum = []
-
-    for ind,t in enumerate(tarr):
-        if ind == 0:
-            tdiff.append(0)
-            tcum.append(0)
-            continue
-        else:
-            tdelt = (t - tarr[ind-1])/60
-            tdiff.append(tdelt)
-            tcum.append((tcum[ind-1] + tdelt))
-    #need to add a comment apparently
-    plt.figure()
-    plt.plot(tcum,tdiff,label='Difference (minutes)')
-    plt.xlabel('Time from Start')
-    plt.ylabel('Time between scans.')
-    plt.legend()
-    plt.title(cass)
-    plt.show()
-    return tarr,tdiff,tcum
-
-
-
-=======
->>>>>>> master
-#spec wmx
-def wmx():
-    return c_stage.cx.user_readback.get()
-
-def wmy():
-    return c_stage.cy.user_readback.get()
-
-def wm():
-    return [c_stage.cx.user_readback.get(), c_stage.cy.user_readback.get()]
-
-def dist():
-    return c_stage.detz.user_readback.get()
-
-def sopen():
-    yield from bps.mv(shutter,5)
-
-def sclose():
-    yield from bps.mv(shutter,0)
-
-box = [.162,.575]
