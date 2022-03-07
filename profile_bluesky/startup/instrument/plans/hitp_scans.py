@@ -6,7 +6,7 @@ from ..devices.stages import c_stage
 from ..devices.misc_devices import shutter as fs, lrf, I0, I1, table_busy, table_trigger
 from ..devices.misc_devices import filt,filter1,filter2,filter3,filter4
 from ..framework import db
-from .helpers import show_image,inscribe,generate_rocking_range, filters, box,run_summary
+from .helpers import show_image,inscribe,generate_rocking_range, filters, box,run_summary,sopen,sclose
 from .adapt_opt import int_to_bool_list
 
 import time 
@@ -18,7 +18,7 @@ from bluesky_live.bluesky_run import BlueskyRun, DocumentCache
 from ssrltools.plans import meshcirc, nscan, level_stage_single
 import numpy as np
 
-__all__ = ['find_coords', 'sample_scan','cassette_scan', 'dark_light_plan', 'exp_time_plan', 'gather_plot_ims',
+__all__ = ['filter_opt_count','find_coords', 'sample_scan','cassette_scan', 'dark_light_plan', 'exp_time_plan', 'gather_plot_ims',
             'plot_dark_corrected', 'multi_acquire_plan', 'level_stage_single','rock','opt_rock_scan',
     # open the shutter
            'opt_cassette_scan','max_pixel_rock','survey','test_stats','opt_survey']
@@ -27,7 +27,7 @@ __all__ = ['find_coords', 'sample_scan','cassette_scan', 'dark_light_plan', 'exp
 
 # center the cassette sample coordinates on the motor stage
 @inject_md_decorator({'macro_name':'find_coords'})
-def find_coords(dets,motor1,motor2,guess,delt=1,num=50):
+def find_coords(dets,motor1,motor2,guess,delt=0.9,num=40):
     """
     find_coords takes a guess for the pinhole center, performs a scan,
     then assigns the motor coordinates of each sample
@@ -42,15 +42,15 @@ def find_coords(dets,motor1,motor2,guess,delt=1,num=50):
     :type center: list with two motor position entires [motor1, motor2]
     """
 
-    # move the motor to the guess positions
-    yield from bps.mv(motor1,guess[0],motor2,guess[1])
-
     # do the scan twice
     count = 0
-    while count < 2:
+    while count < 1:
+
+        #first move the motor into position
+        yield from bps.mv(motor1,guess[0],motor2,guess[1])
 
         # first take a scan in the motor1 direction
-        xid = yield from bp.scan([dets],motor1,guess[0] - delt,guess[0]+delt,num=num)
+        xid = yield from bp.rel_scan([dets],motor1,-delt,delt,num=num)
 
         # grab the photodiode data and find the max
         xhdr = db[xid].table(fill=True) # generate data table
@@ -58,16 +58,18 @@ def find_coords(dets,motor1,motor2,guess,delt=1,num=50):
         xPos = xhdr[motor1.name] # grab the motor positions
         xInd = np.where(xarr == np.max(xarr))[0] # find the max value of the det
         if len(xInd) > 1:
-            xInd = np.take(xInd,len(xInd)//2) # check for multiple maxs: choose middle value
+            #xInd = np.take(xInd,len(xInd)//2) # check for multiple maxs: choose middle value
+            xInd = np.round(np.mean(xInd))
+            print(type(xInd))
         if type(xInd) != np.int64:
-            xInd = xInd[0]
+            xInd = np.int(xInd)
         xLoc = xPos[xInd]
 
         # now move the sample stage to that location and take the other scan
         yield from bps.mv(motor1,xLoc)
 
         # now take the scan in the motor2 direction
-        yid = yield from bp.scan([dets],motor2,guess[1]-delt, guess[1]+delt,num=num)
+        yid = yield from bp.rel_scan([dets],motor2,-delt, delt,num=num)
 
         # grab the photodiode data and find the max
         yhdr = db[yid].table(fill=True) # generate data table
@@ -75,13 +77,14 @@ def find_coords(dets,motor1,motor2,guess,delt=1,num=50):
         yPos = yhdr[motor2.name] # motor positions
         yInd = np.where(yarr == np.max(yarr))[0] # find the max value
         if len (yInd) > 1:
-            yInd = np.take(yInd,len(yInd)//2)
+            #yInd = np.take(yInd,len(yInd)//2)
+            yInd = np.round(np.mean(yInd))
         if type(yInd) != np.int64:
-            yInd = yInd[0]
+            yInd = np.int(yInd)
         yLoc = yPos[yInd]
 
         # move the motor to the max values
-        yield from bps.mv(motor1,xLoc,motor2,yLoc)
+        yield from bps.mv(motor2,yLoc)
 
         # set the new guess to be your current max values
         guess = [xLoc,yLoc]
@@ -91,6 +94,9 @@ def find_coords(dets,motor1,motor2,guess,delt=1,num=50):
 
     # now pass the offsets to the stage object  to reset the positions
     c_stage.correct([xLoc,yLoc])
+
+    # move the stage to the final position
+    yield from bps.mv(motor1,xLoc,motor2,yLoc)
 
 # scan a single sample in a DeNovX cassette based on its center location
 @inject_md_decorator({'macro_name':'sample_scan'})
@@ -708,69 +714,100 @@ def max_pixel_rock(dets, motor,ranger, sat_count=1e4, md={},img_key='dexela_imag
 
 
 @inject_md_decorator({'macro_name':'survey'})
-def survey(f,stage,det,stop,motors,pinguess,name,*,md=None):
+def survey(filt,det,bstop,stage,motors,pinguess,mesh,name,*,md=None):
+    # a survey scan for an entire cassette 
 
-    
-    prms = [5,[0.548,0.156],[20,20]]
+    # filt -- filter box class
+    # det -- dexela detector
+    # bstop -- beamstop
+    # stage -- the stage class object
+    # motors -- [x motor, y motor]
+    # pinguess -- [guess x, guess y] guess for the pinhole location
+    # prms -- parameters for inscribing rocks
+
+    # this scan rocks in y, which should be motor[1]i
+
+    # CLOSE THE FILTER TO BEGIN
+    # and keep it closed when you don't need it
+    print('EXPERIMENT START')
+    yield from bps.mv(fs,0)
+    time.sleep(2)
 
     # clear the filters
-    f.none()
+    filters([1,0,0,0])
 
+    print('FIND COORDS')
+    yield from bps.mv(fs,5)
     # move to the pin and calibrate the position
-    yield from find_coords(stop,motors[0],motors[1],pinguess)
-
-    f.set(2,1)
-    f.set(1,1)
+    yield from find_coords(bstop,motors[0],motors[1],pinguess)
+    yield from bps.mv(fs,0)
 
     # define all the locations you want to scan
     allpos = ['calib1','calib2',
             'A1','A2','A3','A4','A5','A6','A7','A8',
-            'calib1','calib2',
             'B1','B2','B3','B4','B5','B6','B7','B8',
-            'calib1','calib2',
             'C1','C2','C3','C4','C5','C6','C7','C8',
-            'calib1','calib2',
             'D1','D2','D3','D4','D5','D6','D7','D8',
-            'calib1','calib2',
             'E1','E2','E3','E4','E5','E6','E7','E8',
-            'calib1','calib2',
             'F1','F2','F3','F4','F5','F6','F7','F8',
-            'calib1','calib2']
-     
+            ]
+
 
     for pos in allpos:
-        
+        # set the filters for the experiment
+        filters([1,1,0,0])
+        print('SAMPLE ' + str(pos))
+        time.sleep(2)
 
-        center = stage.loc([pos])[0]
+        # get the sample position
+        c = stage.loc([pos])[0]
 
-        #move to the sample locations
-        yield from bps.mv(motors[0],center[0],motors[1],center[1])
+        # move to the sample position
+        yield from bps.mv(motors[0],c[0],motors[1],c[1])
 
-        #take a dark image
+        # set the exposure time before doing filter_opt_count
+        det.cam.acquire_time.set(2)
+
         yield from bps.mv(fs,0)
-        yield from rock(det,motors[0],[[center[0]-1,center[0]+1]],md = {name + 'scan':str(pos) + '_dark'})
+
+        # now do the full rocking scan
+        # first inscribe the motors
+        # define the params
+
+        m,p = inscribe(motors[0],motors[1], c, 5, box, [mesh,mesh])
+
+        # generate the ranges
+        r,s = generate_rocking_range(motors[1],m,p,transpose=True)
+
+        # now open the shutter for the rock
+        print('ROCK START')
         yield from bps.mv(fs,5)
 
+        yield from rock(det,motors[1],r,stage=s,
+                md={'cassette':name,
+                    'sample':str(pos),
+                    name:str(pos),
+                    'I0':I0.get(),
+                    'I1':I1.get(),
+                    'bstop':bstop.get(),
+                    'samp_center':c,
+                    'mesh':mesh,
+                    'filter1':filter1.get(),
+                    'filter2':filter2.get(),
+                    'filter3':filter3.get(),
+                    'filter4':filter4.get()})
 
-        # take a single exposure
-        yield from bp.count([det],
-                md = {name + 'scan':str(pos) + '_single_exposure',
-                'I0':I0.get(),'I1':I1.get(),'bstop':stop.get(),'samp_center':center})
+        print('ROCK FINISH')
+        #close the filters so you don't burn the detector
+        filt.all()
+
+        #close the shutter before the next sample
+        yield from bps.mv(fs,0)
+
+    # close the shutter    
+    yield from sclose()
 
 
-        # take a single rocking scan
-        yield from rock(det,motors[0],[[center[0]-2.5,center[0]+2.5]],
-                md={name + 'scan':str(pos) + '_single_rock',
-                'I0':I0.get(),'I1':I1.get(),'bstop':stop.get(),'samp_center':center})
-
-
-        # take rocking scans across the whole sample surface area
-        yield from opt_rock_scan(det,motors,center,prms,
-                md={name + 'scan':str(pos) + '_full_rock_res10',
-                'I0':I0.get(),'I1':I1.get(),'bstop':stop.get(),'samp_center':center})
-        print('SAMPLE ' + str(pos) + ' FINISHED!!!!')
-    yield from bps.mv(fs,0)
-    f.all()
 
 @inject_md_decorator({'macro_name':'test_stats'})
 def test_stats(det,motor,ranger):
@@ -902,7 +939,7 @@ def opt_survey(filt,det,bstop,stage,motors,pinguess,mesh,name,*,md=None):
     time.sleep(2)
 
     # clear the filters
-    filt.none()
+    filters([1,0,0,0])
 
     print('FIND COORDS')
     time.sleep(2)
@@ -967,7 +1004,19 @@ def opt_survey(filt,det,bstop,stage,motors,pinguess,mesh,name,*,md=None):
         print('ROCK START')
         yield from bps.mv(fs,5)
 
-        yield from rock(det,motors[1],r,stage=s,md={name:str(pos),'I0':I0.get(),'I1':I1.get(),'bstop':bstop.get(),'samp_center':c,'mesh':mesh,'filter1':filter1.get(),'filter2':filter2.get(),'filter3':filter3.get(),'filter4':filter4.get()})
+        yield from rock(det,motors[1],r,stage=s,
+                md={'cassette':name,
+                    'sample':str(pos),
+                    name:str(pos),
+                    'I0':I0.get(),
+                    'I1':I1.get(),
+                    'bstop':bstop.get(),
+                    'samp_center':c,
+                    'mesh':mesh,
+                    'filter1':filter1.get(),
+                    'filter2':filter2.get(),
+                    'filter3':filter3.get(),
+                    'filter4':filter4.get()})
         
         time.sleep(2)
         print('ROCK FINISH')
@@ -982,4 +1031,4 @@ def opt_survey(filt,det,bstop,stage,motors,pinguess,mesh,name,*,md=None):
         time.sleep(2)
 
     # close the shutter    
-    yield from bps.mv(fs,0)
+    yield from sclose()

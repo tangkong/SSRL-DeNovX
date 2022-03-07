@@ -9,6 +9,10 @@ __pycache__/
 .metadata/
 .metadata.md/
 
+# really ignore the swp files. 
+*.swp
+*.swo
+
 .test_profile/
 
 docs/source/_build/
