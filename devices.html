@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Devices &mdash; SSRL-DeNovX 0.1 documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/doctools.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Plans" href="plans.html" />
+    <link rel="prev" title="Basic Operation in Bluesky" href="basic-operation.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="index.html" class="icon icon-home"> SSRL-DeNovX
+          </a>
+              <div class="version">
+                0.1
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">User Documentation</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="beamline-startup.html">Beamline Startup, EPICS and Bluesky</a></li>
+<li class="toctree-l1"><a class="reference internal" href="basic-operation.html">Basic Operation in Bluesky</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Devices</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#dexela-2923">Dexela 2923</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#cassette-motor-stage">Cassette Motor Stage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#beamstop">Beamstop</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#filter-box">Filter Box</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#shutter">Shutter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#ion-chambers">Ion Chambers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="plans.html">Plans</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">SSRL-DeNovX</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+      <li>Devices</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/devices.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="devices">
+<h1>Devices<a class="headerlink" href="#devices" title="Permalink to this headline"></a></h1>
+<p>A variety of devices are available for use at SSRL-DeNovX.  Currently only
+High Throughput (HiTp) diffraction is supported, but more functionality will
+be added in the future.</p>
+<p>While most PV’s are accessible from the ipython session, it’s generally
+advised to use the GUI elements to adjust parameters like exposure time or
+frame rates.</p>
+<p>A fleshed-out profile has been built for beamline 10-2a at Stanford Synchrotron Radiation Laboratory (SSRL)
+with a specific set of devices and instruments.</p>
+<p>As of December 2021 the 10-2a profile includes the following devices:
+- An xy motor stage with sample mount
+- A z motor for detector motion
+- A Dexela 2923 detector
+- A photodiode beamstop
+- A filter box with 4 interchangeable slots for filters of varying thickness
+- The shutter to the hutch</p>
+<section id="dexela-2923">
+<h2>Dexela 2923<a class="headerlink" href="#dexela-2923" title="Permalink to this headline"></a></h2>
+<p>The Dexela detector is currently defined as the variable <code class="docutils literal notranslate"><span class="pre">dexDet</span></code>. The <code class="docutils literal notranslate"><span class="pre">dexDet</span></code> variable is passed to various
+Bluesky commands and wrappers for data acquisition.</p>
+<p>Some useful functions:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">dexDet.cam.acquire_time.get()</span></code> – Print the current detector exposure time.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">dexDet.cam.acquire_time.set(t)</span></code> – Set the detector exposure time to <code class="docutils literal notranslate"><span class="pre">t</span></code> seconds.</p></li>
+</ul>
+</section>
+<section id="cassette-motor-stage">
+<h2>Cassette Motor Stage<a class="headerlink" href="#cassette-motor-stage" title="Permalink to this headline"></a></h2>
+<p>As of December 2021 the profile is configured for a 2-axis motion stage that moves in a plane perpendicular to the
+beam direction (the x and y directions, in the laboratory coordinate system). The stage is defined as the variable
+<code class="docutils literal notranslate"><span class="pre">c_stage</span></code> and this variable is passed to various Bluesky commands for motor movement.</p>
+<p>The two motors can be accessed individually:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">c_stage.cx</span></code> – The x motor</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">c_stage.cy</span></code> – the y motor</p></li>
+</ul>
+<p>The variables <code class="docutils literal notranslate"><span class="pre">cx</span></code> and <code class="docutils literal notranslate"><span class="pre">cy</span></code> have also been defined to directly access each motor for convenience. There are also two
+convenience functions defined:</p>
+<ul class="simple">
+<li><p>wmx() – returns the current position (float) of the x motor</p></li>
+<li><p>wmy() – returns the current position (float) of the y motor</p></li>
+</ul>
+<p>These functions can be passed into Bluesky plans as ranges or locations to scan over.</p>
+<p>The sample stage currently has 51 sample positions predefined. There are 8 columns labeled A through F and 6 rows
+labeled 1 through 6. There are also two calibrants mounted on the sample holder. Finally, there is a Beryllium screen
+a pinhole mounted near the base of the sample holder.</p>
+<p>Sample locations can be accessed through the function <code class="docutils literal notranslate"><span class="pre">c_stage.loc([sample_name])</span></code>. This function will return the position
+of a given sample (sample_name) in motor coordinates (if the stage has been aligned). For example, you can find the
+coordinates of a sample in column A row 4 by <code class="docutils literal notranslate"><span class="pre">loc</span> <span class="pre">=</span> <span class="pre">c_stage.loc(['A4'])</span></code>. <code class="docutils literal notranslate"><span class="pre">loc</span></code> will be a list with two coordinates
+<code class="docutils literal notranslate"><span class="pre">[x_coordinate,y_coordinate]</span></code> corresponding to the sample location.</p>
+<p>When the profile is booted for the first time it automatically loads all sample positions in a general coordinate system.
+The origin of the coordinate system (0,0) is defined as the pinhole location. However, these locations do not necessarily
+correspond to the location of samples in the motor coordinate system initially. The <code class="docutils literal notranslate"><span class="pre">c_stage</span></code> class has a method called
+<code class="docutils literal notranslate"><span class="pre">correct</span></code> that can align the two coordinate systems. To correct for an offset between the two systems, you can pass
+offsets in the x and y direction by <code class="docutils literal notranslate"><span class="pre">c_stage.correct([x_offset,y_offset])</span></code>.</p>
+<p>The stage object also has a motor called <code class="docutils literal notranslate"><span class="pre">c_stage.detz</span></code> that is used for setting the sample-to-detector distance. This
+distance is set on startup and should not be changed unless the user is absolutely sure. This functionality may change
+and be expanded upon in future builds.</p>
+</section>
+<section id="beamstop">
+<h2>Beamstop<a class="headerlink" href="#beamstop" title="Permalink to this headline"></a></h2>
+<p>Beamline 10-2a is equipped with a photodiode beamstop that can read the direct intensity of the beam. It is generally
+used for aligning the stage and can also monitor beam intensity/flux. The variable <code class="docutils literal notranslate"><span class="pre">bstop</span></code> can be passed to
+various Bluesky plans as an instrument.</p>
+</section>
+<section id="filter-box">
+<h2>Filter Box<a class="headerlink" href="#filter-box" title="Permalink to this headline"></a></h2>
+<p>Beamline 10-2a has a filter box with slots for 4 filter foils. The filter box can be accessed through the variable
+<code class="docutils literal notranslate"><span class="pre">filt</span></code>. The state of each filter is defined as <code class="docutils literal notranslate"><span class="pre">1</span></code> if the filter is in the path of the beam and <code class="docutils literal notranslate"><span class="pre">0</span></code> if the
+filter is out of the path of the beam.</p>
+<p>Some useful functions:</p>
+<ul class="simple">
+<li><p>filt.set([filter1,filter2,filter3,filter4]) – set the state of each filter. Example: filter1-0,filter2=1,filter3=0,filter4=0</p></li>
+<li><p>filt.all() – set all filters to a state of 1 (in the path of the beam)</p></li>
+<li><p>filt.none() – set all filters to a state of 0 (out of the path of the beam)</p></li>
+</ul>
+</section>
+<section id="shutter">
+<h2>Shutter<a class="headerlink" href="#shutter" title="Permalink to this headline"></a></h2>
+<p>The shutter is defined by a variable <code class="docutils literal notranslate"><span class="pre">shutter</span></code>. The shutter has two states: closed (0) and open (5).</p>
+</section>
+<section id="ion-chambers">
+<h2>Ion Chambers<a class="headerlink" href="#ion-chambers" title="Permalink to this headline"></a></h2>
+<p>There are two ion chambers in the path of the beam – one is upstream of the shutter and one is downstream of the shutter
+and filter box. These sensors are defined by the variables <code class="docutils literal notranslate"><span class="pre">I0</span></code> and <code class="docutils literal notranslate"><span class="pre">I1</span></code> respectively. They can be passed to
+Bluesky plans as metadata for purposes of monitoring the beam intensity and normalizing images.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="basic-operation.html" class="btn btn-neutral float-left" title="Basic Operation in Bluesky" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="plans.html" class="btn btn-neutral float-right" title="Plans" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2022, roberttk.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
